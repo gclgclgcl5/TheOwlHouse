@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>{{ title }}</h1>
+    <p class="hint"><a class="back-link" href="/admin/pages">← 返回列表</a></p>
+  </header>
+  <main>
+    {% if error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
+    <form method="post" action="{{ action }}" enctype="multipart/form-data" class="form">
+      <label>标题
+        <input type="text" name="title" required maxlength="200"
+               value="{{ page.title if page else '' }}" />
+      </label>
+      {% if auto_page_no %}
+      <p class="hint">页序将自动递增分配（当前最大页序 + 1）</p>
+      {% else %}
+      <label>页序
+        <input type="number" name="page_no" min="1" required
+               value="{{ page.page_no if page else 1 }}" />
+      </label>
+      {% endif %}
+      <label>图片{% if page %}（可选，不选则保留原图）{% endif %}
+        <input type="file" name="image" accept="image/*" {% if not page %}required{% endif %} />
+      </label>
+      <p class="hint">支持 jpg/png/webp/gif；单张上限 20MB；头像上传上限 5MB</p>
+      {% if page and page.image_url %}
+      <p><img class="preview" src="{{ page.image_url }}" alt="当前图片" /></p>
+      {% endif %}
+      <button type="submit">保存</button>
+    </form>
+  </main>
+</body>
+</html>

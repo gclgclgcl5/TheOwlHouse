@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>用户管理</h1>
+    <p class="hint">活跃用户 {{ total }} 人</p>
+    <p><a class="back-link" href="/admin/">← 返回首页</a></p>
+  </header>
+  <main>
+    {% if message == "deleted" %}
+    <p class="ok">用户已删除</p>
+    {% elif message == "missing" %}
+    <p class="error">用户不存在或已删除</p>
+    {% endif %}
+    {% if users %}
+    <div class="data-list data-list--users">
+      <div class="data-list__head" aria-hidden="true">
+        <span>头像</span>
+        <span>ID</span>
+        <span>昵称</span>
+        <span>注册时间</span>
+        <span>操作</span>
+      </div>
+      {% for u in users %}
+      <div class="data-list__row">
+        <div class="data-list__cell">
+          <img class="thumb" src="{{ u.avatar_url }}" alt="" />
+        </div>
+        <div class="data-list__cell">{{ u.id }}</div>
+        <div class="data-list__cell">{{ u.nickname }}</div>
+        <div class="data-list__cell hint">{{ u.created_at }}</div>
+        <div class="data-list__cell data-list__actions">
+          <form method="post" action="/admin/users/{{ u.id }}/delete"
+                onsubmit="return confirm('确认删除该用户？删除后无法登录。');">
+            <button type="submit" class="danger">删除</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="hint">暂无活跃用户。</p>
+    {% endif %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+data/*.db
+data/uploads/comics/*
+data/uploads/avatars/*
+!data/uploads/**/.gitkeep
+# 填写过密码/PAT 的部署手册不要进仓库
+docs/AI服务器部署手册.md

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>漫画管理</h1>
+    <p class="hint">共 {{ total }} 页 · 每屏 {{ page_size }} 条 · 漫画图上限 20MB（jpg/png/webp/gif）</p>
+    <p><a class="back-link" href="/admin/">← 返回首页</a></p>
+  </header>
+  <main>
+    {% if message %}
+    <p class="ok">操作成功：{{ message }}</p>
+    {% endif %}
+    <p><a class="button" href="/admin/pages/new">新增漫画页</a></p>
+    {% if pages %}
+    <div class="data-list data-list--pages">
+      <div class="data-list__head">
+        <span>预览</span>
+        <span>标题</span>
+        <span class="sort-head">
+          <span>页序</span>
+          {% if order == "page_no_desc" %}
+          <a class="sort-toggle" href="/admin/pages?order=page_no" title="切换为页序从小到大">大→小</a>
+          {% else %}
+          <a class="sort-toggle" href="/admin/pages?order=page_no_desc" title="切换为页序从大到小">小→大</a>
+          {% endif %}
+        </span>
+        <span>时间</span>
+        <span>操作</span>
+      </div>
+      {% for p in pages %}
+      <div class="data-list__row">
+        <div class="data-list__cell">
+          <img class="thumb" src="{{ p.image_url }}" alt="" />
+        </div>
+        <div class="data-list__cell">{{ p.title }}</div>
+        <div class="data-list__cell">{{ p.page_no }}</div>
+        <div class="data-list__cell hint">{{ p.created_at }}</div>
+        <div class="data-list__cell data-list__actions">
+          <a href="/admin/pages/{{ p.id }}/comments">评论（{{ p.comment_count }}）</a>
+          <a href="/admin/pages/{{ p.id }}/edit">编辑</a>
+          <form method="post" action="/admin/pages/{{ p.id }}/delete" onsubmit="return confirm('确认删除？');">
+            <button type="submit" class="danger">删除</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if total_pages > 1 %}
+    <nav class="pager" aria-label="分页">
+      {% if page > 1 %}
+      <a href="/admin/pages?order={{ order }}&page={{ page - 1 }}">上一页</a>
+      {% else %}
+      <span class="pager__disabled">上一页</span>
+      {% endif %}
+
+      {% if page_numbers[0] > 1 %}
+      <a href="/admin/pages?order={{ order }}&page=1">1</a>
+      {% if page_numbers[0] > 2 %}
+      <span class="pager__ellipsis">…</span>
+      {% endif %}
+      {% endif %}
+
+      {% for n in page_numbers %}
+        {% if n == page %}
+        <span class="pager__current" aria-current="page">{{ n }}</span>
+        {% else %}
+        <a href="/admin/pages?order={{ order }}&page={{ n }}">{{ n }}</a>
+        {% endif %}
+      {% endfor %}
+
+      {% if page_numbers|last < total_pages %}
+      {% if page_numbers|last < total_pages - 1 %}
+      <span class="pager__ellipsis">…</span>
+      {% endif %}
+      <a href="/admin/pages?order={{ order }}&page={{ total_pages }}">{{ total_pages }}</a>
+      {% endif %}
+
+      {% if page < total_pages %}
+      <a href="/admin/pages?order={{ order }}&page={{ page + 1 }}">下一页</a>
+      {% else %}
+      <span class="pager__disabled">下一页</span>
+      {% endif %}
+    </nav>
+    {% endif %}
+    {% else %}
+    <p class="hint">还没有漫画页，点击上方按钮上传。</p>
+    {% endif %}
+  </main>
+</body>
+</html>

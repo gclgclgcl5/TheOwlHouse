@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>{{ title }}</h1>
+    <p class="hint"><a class="back-link" href="/admin/pages">← 返回漫画列表</a> · 页序 {{ page.page_no }}</p>
+  </header>
+  <main>
+    {% if message == "deleted" %}
+    <p class="ok">评论已删除</p>
+    {% endif %}
+    {% if comments %}
+    <ul class="comment-list">
+      {% for c in comments %}
+      <li class="comment-item">
+        <div class="comment-meta">
+          <strong>{{ c.author_nickname }}</strong>
+          <span class="hint">#{{ c.id }} · {{ c.created_at }} · {{ c.like_count }} 赞</span>
+        </div>
+        <p>{{ c.content }}</p>
+        <form method="post" action="/admin/comments/{{ c.id }}/delete"
+              onsubmit="return confirm('删除该评论及其全部回复？');">
+          <button type="submit" class="danger">删除</button>
+        </form>
+        {% if c.replies %}
+        <ul class="comment-replies">
+          {% for r in c.replies %}
+          <li class="comment-item reply">
+            <div class="comment-meta">
+              <strong>{{ r.author_nickname }}</strong>
+              <span class="hint">#{{ r.id }} · {{ r.created_at }} · {{ r.like_count }} 赞</span>
+            </div>
+            <p>{{ r.content }}</p>
+            <form method="post" action="/admin/comments/{{ r.id }}/delete"
+                  onsubmit="return confirm('确认删除该回复？');">
+              <button type="submit" class="danger">删除</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint">该页暂无评论。</p>
+    {% endif %}
+  </main>
+</body>
+</html>

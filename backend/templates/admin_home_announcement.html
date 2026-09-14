@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>{{ title }}</h1>
+    <p class="hint"><a class="back-link" href="/admin/">← 返回首页</a></p>
+  </header>
+  <main>
+    {% if message == "saved" %}
+    <p class="ok">已保存。客户端下拉刷新或重新进入首页即可看到新标题。</p>
+    {% endif %}
+    {% if error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
+    <p class="hint">显示在读者 App 首页顶栏（原「欢迎来到沸腾群岛！」位置）。建议不超过约 20 个字，以免挤占通知图标。</p>
+    <form method="post" action="/admin/home-announcement" class="form">
+      <label>首页标题 / 小公告
+        <input type="text" name="title" maxlength="80" required
+               value="{{ config.title }}" placeholder="欢迎来到沸腾群岛！" />
+      </label>
+      <button type="submit">保存</button>
+    </form>
+  </main>
+</body>
+</html>

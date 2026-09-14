@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>{{ app_name }} · 管理后台</h1>
+    <p class="hint">已登录：{{ admin_username }}</p>
+  </header>
+  <main>
+    <ul class="home-menu">
+      <li><a href="/admin/pages">漫画管理</a></li>
+      <li><a href="/admin/users">用户管理</a></li>
+      <li><a href="/admin/app-update">App 版本更新</a></li>
+      <li><a href="/admin/home-announcement">首页公告标题</a></li>
+      <li>
+        <form method="post" action="/admin/logout">
+          <button type="submit" class="home-menu__logout">退出登录</button>
+        </form>
+      </li>
+    </ul>
+  </main>
+</body>
+</html>

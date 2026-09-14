@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>{{ title }}</h1>
+    <p class="hint"><a class="back-link" href="/admin/">← 返回首页</a></p>
+  </header>
+  <main>
+    {% if message == "saved" %}
+    <p class="ok">已保存。客户端下次打开首页时会检查此版本。</p>
+    {% endif %}
+    {% if error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
+    <p class="hint">
+      填写的 <strong>versionCode</strong> 需大于用户手机上已安装 APK 的 versionCode，才会弹出更新提示。
+      当前读者端默认 versionCode 见 App 的 <code>build.gradle.kts</code>（发布新包时请递增）。
+    </p>
+    <form method="post" action="/admin/app-update" class="form">
+      <label>versionCode（整数，用于比较）
+        <input type="number" name="version_code" min="0" required
+               value="{{ config.version_code }}" />
+      </label>
+      <label>版本名（展示用，如 0.2.0）
+        <input type="text" name="version_name" maxlength="32"
+               value="{{ config.version_name }}" placeholder="0.2.0" />
+      </label>
+      <label>下载链接（APK / 更新包 URL）
+        <input type="url" name="download_url" maxlength="1024"
+               value="{{ config.download_url }}"
+               placeholder="https://example.com/owlhouse-0.2.0.apk" />
+      </label>
+      <label>更新说明（可选，显示在弹窗中）
+        <textarea name="message" rows="4" maxlength="2000"
+                  placeholder="修复若干问题，建议更新">{{ config.message }}</textarea>
+      </label>
+      <p class="hint">将 versionCode 设为 0 可关闭更新提示。</p>
+      <button type="submit">保存</button>
+    </form>
+  </main>
+</body>
+</html>
