@@ -270,9 +270,9 @@ button, input, textarea { font: inherit; }
   background: var(--bg);
 }
 .reader.docked .comment-preview {
-  flex: 0 0 16vh;
-  height: 16vh;
-  max-height: 16vh;
+  flex: 0 0 11vh;
+  height: 11vh;
+  max-height: 11vh;
   overflow-y: auto;
   background: transparent;
   border-top: 1px solid rgba(90, 122, 184, 0.22);
@@ -286,6 +286,25 @@ button, input, textarea { font: inherit; }
 .reader.docked .entry-bar,
 .reader.docked .composer-bar {
   flex-shrink: 0;
+}
+.reader.docked .entry-bar {
+  width: calc(100% - 16px);
+  margin: 4px 8px calc(4px + env(safe-area-inset-bottom));
+  min-height: 32px;
+  font-size: 0.82rem;
+}
+.reader.docked .comment-preview .preview-row {
+  margin: 2px 8px;
+  padding: 4px 6px;
+}
+.reader.docked .comment-preview .preview-row .av,
+.reader.docked .comment-preview .preview-row img {
+  width: 22px;
+  height: 22px;
+}
+.reader.docked .comment-preview .preview-text {
+  font-size: 0.8rem;
+  line-height: 1.3;
 }
 /* 评论区模式下条漫可在图区内下滑，避免底部被裁切且无法查看 */
 .reader.docked .reader-page.strip {
