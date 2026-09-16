@@ -69,6 +69,15 @@ export function renderHome(root) {
       </nav>
       <div class="list" id="list"></div>
     </div>
+    <div class="version-info-overlay hidden" id="version-info-overlay">
+      <div class="version-info-panel" role="dialog" aria-labelledby="version-info-title">
+        <div class="version-info-head">
+          <strong id="version-info-title">版本介绍</strong>
+          <button class="icon-btn" id="version-info-close" type="button" aria-label="关闭">×</button>
+        </div>
+        <div class="version-info-body" id="version-info-body"></div>
+      </div>
+    </div>
     <div class="dialog-mask hidden" id="dlg">
       <div class="dialog">
         <h2>退出登录</h2>
@@ -86,6 +95,27 @@ export function renderHome(root) {
   const badge = root.querySelector("#badge");
   const dlg = root.querySelector("#dlg");
   const collectionBtn = root.querySelector("#collection");
+  const versionInfoOverlay = root.querySelector("#version-info-overlay");
+  const versionInfoTitle = root.querySelector("#version-info-title");
+  const versionInfoBody = root.querySelector("#version-info-body");
+  const versionInfoClose = root.querySelector("#version-info-close");
+
+  function openVersionInfo(version) {
+    if (!version || !versionInfoOverlay) return;
+    versionInfoTitle.textContent = version.name || "版本介绍";
+    versionInfoBody.textContent = (version.description || "").trim() || "暂无介绍";
+    versionInfoOverlay.classList.remove("hidden");
+  }
+  function closeVersionInfo() {
+    versionInfoOverlay?.classList.add("hidden");
+  }
+  versionInfoClose.onclick = (e) => {
+    e.stopPropagation();
+    closeVersionInfo();
+  };
+  versionInfoOverlay.onclick = (e) => {
+    if (e.target === versionInfoOverlay) closeVersionInfo();
+  };
 
   function setAnnounce(text) {
     title = text || title;
@@ -195,15 +225,24 @@ export function renderHome(root) {
       return `
         <div class="${cls}" data-version="${v.id}">
           <img src="${escapeHtml(src)}" alt="" />
-          <div>
-            <div class="title">${escapeHtml(v.name)}${v.is_default ? " · 默认" : ""}</div>
+          <div class="page-row-main">
+            <div class="title">${escapeHtml(v.name)}</div>
             <div class="sub">${subParts.map(escapeHtml).join(" · ")}</div>
           </div>
+          <button class="icon-btn page-row-info" type="button" data-info-version="${v.id}" title="版本介绍" aria-label="版本介绍">ℹ</button>
         </div>`;
     });
     listEl.innerHTML = parts.join("");
     listEl.querySelectorAll("[data-version]").forEach((el) => {
       el.onclick = () => go(`/king/${el.dataset.version}`);
+    });
+    listEl.querySelectorAll("[data-info-version]").forEach((btn) => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const id = Number(btn.dataset.infoVersion);
+        const version = kingVersions.find((v) => v.id === id);
+        openVersionInfo(version);
+      };
     });
   }
 

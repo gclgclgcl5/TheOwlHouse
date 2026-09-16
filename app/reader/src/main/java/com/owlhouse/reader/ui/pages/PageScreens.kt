@@ -720,6 +720,7 @@ private fun KingVersionCard(
     isLastRead: Boolean,
     onClick: () -> Unit,
 ) {
+    var infoOpen by remember(version.id) { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -747,7 +748,7 @@ private fun KingVersionCard(
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = if (version.isDefault) "${version.name} · 默认" else version.name,
+                text = version.name,
                 style = MaterialTheme.typography.titleMedium,
                 color = if (isLastRead) {
                     MaterialTheme.colorScheme.primary
@@ -770,6 +771,34 @@ private fun KingVersionCard(
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
+        IconButton(
+            onClick = { infoOpen = true },
+        ) {
+            Icon(
+                Icons.Filled.Info,
+                contentDescription = "版本介绍",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+    if (infoOpen) {
+        AlertDialog(
+            onDismissRequest = { infoOpen = false },
+            title = { Text(version.name) },
+            text = {
+                Text(
+                    text = version.description.ifBlank { "暂无介绍" },
+                    modifier = Modifier
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { infoOpen = false }) {
+                    Text("关闭")
+                }
+            },
+        )
     }
 }
 
