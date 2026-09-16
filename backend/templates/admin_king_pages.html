@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>长寿之王</h1>
+    <p class="hint">已上传 {{ uploaded }} 页{% if pending %} · 待上传 {{ pending }} 页{% endif %} · 页序与图片不可删除，标题全版本共享</p>
+    <p><a class="back-link" href="/admin/">← 返回首页</a></p>
+  </header>
+  <main>
+    {% if message %}
+    <p class="ok">操作成功</p>
+    {% endif %}
+    {% if error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
+
+    <nav class="version-tabs" aria-label="版本">
+      {% for v in versions %}
+      <a class="{% if v.id == version.id %}on{% endif %}" href="/admin/king/versions/{{ v.id }}">{{ v.name }}{% if v.is_default %}（默认）{% endif %}</a>
+      {% endfor %}
+    </nav>
+
+    <section class="king-meta">
+      <img class="thumb" src="{{ cover_url }}" alt="" />
+      <form method="post" action="/admin/king/versions/{{ version.id }}/meta" enctype="multipart/form-data" class="form form--inline">
+        <label>版本名称
+          <input type="text" name="name" required maxlength="200" value="{{ version.name }}" />
+        </label>
+        <label>更换封面（可选）
+          <input type="file" name="cover" accept="image/*" />
+        </label>
+        <button type="submit">保存版本信息</button>
+      </form>
+      {% if not version.is_default %}
+      <form method="post" action="/admin/king/versions/{{ version.id }}/delete"
+            onsubmit="return confirm('删除该版本？全局页与评论会保留。');">
+        <button type="submit" class="danger">删除此版本</button>
+      </form>
+      {% endif %}
+    </section>
+
+    <section class="king-new-version">
+      <h2>添加版本</h2>
+      <form method="post" action="/admin/king/versions" enctype="multipart/form-data" class="form form--inline">
+        <label>名称
+          <input type="text" name="name" required maxlength="200" />
+        </label>
+        <label>封面
+          <input type="file" name="cover" accept="image/*" required />
+        </label>
+        <button type="submit">创建版本</button>
+      </form>
+    </section>
+
+    {% if pending > 0 %}
+    <p class="hint">请先补全待上传页，再追加新页。</p>
+    <p><span class="button button--disabled">追加新页</span></p>
+    {% else %}
+    <p><a class="button" href="/admin/king/versions/{{ version.id }}/pages/new">追加新页</a></p>
+    {% endif %}
+
+    {% if rows %}
+    <div class="data-list data-list--king">
+      <div class="data-list__head">
+        <span>预览</span>
+        <span>标题</span>
+        <span>页序</span>
+        <span>操作</span>
+      </div>
+      {% for r in rows %}
+      <div class="data-list__row">
+        <div class="data-list__cell">
+          {% if r.image_url %}
+          <img class="thumb" src="{{ r.image_url }}" alt="" />
+          {% else %}
+          <span class="thumb-empty">待上传</span>
+          {% endif %}
+        </div>
+        <div class="data-list__cell">{{ r.title }}</div>
+        <div class="data-list__cell">{{ r.page_no }}</div>
+        <div class="data-list__cell data-list__actions">
+          <a href="/admin/king/slots/{{ r.slot_id }}/comments">评论（{{ r.comment_count }}）</a>
+          <a href="/admin/king/versions/{{ version.id }}/slots/{{ r.slot_id }}">{% if r.image_url %}替换图片 / 改标题{% else %}上传图片 / 改标题{% endif %}</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="hint">还没有全局页。点「追加新页」上传第一页（会登记作品级页序）。</p>
+    {% endif %}
+  </main>
+</body>
+</html>

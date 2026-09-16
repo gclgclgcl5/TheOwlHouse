@@ -23,8 +23,11 @@ class Notification(Base):
         index=True,
         nullable=True,
     )
-    page_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("comic_pages.id", ondelete="CASCADE"), index=True, nullable=False
+    page_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("comic_pages.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    king_slot_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("king_slots.id", ondelete="CASCADE"), index=True, nullable=True
     )
     comment_preview: Mapped[str] = mapped_column(String(80), nullable=False, default="")
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

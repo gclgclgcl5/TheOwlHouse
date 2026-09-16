@@ -10,8 +10,11 @@ class Comment(Base):
     __tablename__ = "comments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    page_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("comic_pages.id", ondelete="CASCADE"), index=True, nullable=False
+    page_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("comic_pages.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    king_slot_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("king_slots.id", ondelete="CASCADE"), index=True, nullable=True
     )
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False

@@ -6,6 +6,9 @@ import {
   isRead,
   loadCollectionMode,
   saveCollectionMode,
+  loadHomeTab,
+  saveHomeTab,
+  loadKingProgress,
 } from "../store.js";
 import { go } from "../router.js";
 import { escapeHtml } from "../util.js";
@@ -45,6 +48,8 @@ export function renderHome(root) {
   let loadingMore = false;
   let title = "欢迎来到沸腾群岛！";
   let collectionMode = loadCollectionMode();
+  let homeTab = loadHomeTab();
+  let kingVersions = [];
 
   root.innerHTML = `
     <div class="screen">
@@ -58,6 +63,10 @@ export function renderHome(root) {
         <button class="icon-btn" id="msg" type="button" title="消息">🔔<span class="badge hidden" id="badge"></span></button>
         <button class="icon-btn" id="logout" type="button" title="退出">⎋</button>
       </header>
+      <nav class="home-tabs" aria-label="分区">
+        <button type="button" class="home-tab${homeTab === "doujin" ? " on" : ""}" data-tab="doujin">同人漫画</button>
+        <button type="button" class="home-tab${homeTab === "king" ? " on" : ""}" data-tab="king">长寿之王</button>
+      </nav>
       <div class="list" id="list"></div>
     </div>
     <div class="dialog-mask hidden" id="dlg">
@@ -88,9 +97,18 @@ export function renderHome(root) {
   setAnnounce(title);
 
   function syncCollectionBtn() {
+    const show = homeTab === "doujin";
+    collectionBtn.classList.toggle("hidden", !show);
     collectionBtn.classList.toggle("on", collectionMode);
     collectionBtn.setAttribute("aria-pressed", collectionMode ? "true" : "false");
     collectionBtn.title = collectionMode ? "合集模式已开" : "合集模式";
+  }
+
+  function syncTabs() {
+    root.querySelectorAll(".home-tab").forEach((btn) => {
+      btn.classList.toggle("on", btn.dataset.tab === homeTab);
+    });
+    syncCollectionBtn();
   }
 
   function openCollection(col) {
@@ -99,7 +117,7 @@ export function renderHome(root) {
     go(`/page/${hit ? hit.id : col.cover.id}`);
   }
 
-  function renderList(footer) {
+  function renderDoujinList(footer) {
     const prog = loadProgress();
     const parts = [];
     if (prog.lastPageId > 0) {
@@ -162,6 +180,33 @@ export function renderHome(root) {
     }
   }
 
+  function renderKingList() {
+    const prog = loadKingProgress();
+    if (!kingVersions.length) {
+      listEl.innerHTML = `<div class="center">暂无内容，请先在管理后台创建长寿之王版本。</div>`;
+      return;
+    }
+    const parts = kingVersions.map((v) => {
+      const current = prog.lastVersionId > 0 && v.id === prog.lastVersionId;
+      const cls = `card version-card${current ? " current" : ""}`;
+      const src = mediaUrl(v.cover_url);
+      const subParts = [`已上传 ${v.uploaded_count} 页`];
+      if (current) subParts.push("上次阅读");
+      return `
+        <div class="${cls}" data-version="${v.id}">
+          <img src="${escapeHtml(src)}" alt="" />
+          <div>
+            <div class="title">${escapeHtml(v.name)}${v.is_default ? " · 默认" : ""}</div>
+            <div class="sub">${subParts.map(escapeHtml).join(" · ")}</div>
+          </div>
+        </div>`;
+    });
+    listEl.innerHTML = parts.join("");
+    listEl.querySelectorAll("[data-version]").forEach((el) => {
+      el.onclick = () => go(`/king/${el.dataset.version}`);
+    });
+  }
+
   async function ensureAllPagesLoaded() {
     while (pages.length < total) {
       const res = await api.listPages({
@@ -176,28 +221,41 @@ export function renderHome(root) {
     }
   }
 
+  async function refreshUnreadAndAnnounce() {
+    const [unread, ann] = await Promise.all([
+      api.unreadCount().catch(() => ({ count: 0 })),
+      api.homeAnnouncement().catch(() => null),
+    ]);
+    if (ann?.title) setAnnounce(ann.title.trim());
+    const n = unread.count || 0;
+    if (n > 0) {
+      badge.textContent = n > 99 ? "99+" : String(n);
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+  }
+
+  async function refreshDoujin() {
+    const res = await api.listPages({ limit: PAGE_SIZE, offset: 0, order: "page_no" });
+    pages = res.items || [];
+    total = res.total || 0;
+    if (collectionMode) await ensureAllPagesLoaded();
+    const end = pages.length >= total && total > 0;
+    renderDoujinList(end ? `<p class="hint" style="text-align:center">没有更多了</p>` : "");
+  }
+
+  async function refreshKing() {
+    const res = await api.listKingVersions();
+    kingVersions = res.items || [];
+    renderKingList();
+  }
+
   async function refresh() {
     try {
-      const [res, unread, ann] = await Promise.all([
-        api.listPages({ limit: PAGE_SIZE, offset: 0, order: "page_no" }),
-        api.unreadCount().catch(() => ({ count: 0 })),
-        api.homeAnnouncement().catch(() => null),
-      ]);
-      pages = res.items || [];
-      total = res.total || 0;
-      if (ann?.title) setAnnounce(ann.title.trim());
-      const n = unread.count || 0;
-      if (n > 0) {
-        badge.textContent = n > 99 ? "99+" : String(n);
-        badge.classList.remove("hidden");
-      } else {
-        badge.classList.add("hidden");
-      }
-      if (collectionMode) {
-        await ensureAllPagesLoaded();
-      }
-      const end = pages.length >= total && total > 0;
-      renderList(end ? `<p class="hint" style="text-align:center">没有更多了</p>` : "");
+      await refreshUnreadAndAnnounce();
+      if (homeTab === "king") await refreshKing();
+      else await refreshDoujin();
     } catch (e) {
       if (!isLoggedIn() || e.status === 401) {
         go("/login");
@@ -208,14 +266,14 @@ export function renderHome(root) {
   }
 
   async function loadMore() {
-    if (collectionMode || loadingMore || pages.length >= total) return;
+    if (homeTab !== "doujin" || collectionMode || loadingMore || pages.length >= total) return;
     loadingMore = true;
     try {
       const res = await api.listPages({ limit: PAGE_SIZE, offset: pages.length, order: "page_no" });
       pages = pages.concat(res.items || []);
       total = res.total || total;
       const end = pages.length >= total && total > 0;
-      renderList(end ? `<p class="hint" style="text-align:center">没有更多了</p>` : "");
+      renderDoujinList(end ? `<p class="hint" style="text-align:center">没有更多了</p>` : "");
     } catch (e) {
       if (!isLoggedIn() || e.status === 401) go("/login");
     } finally {
@@ -224,6 +282,7 @@ export function renderHome(root) {
   }
 
   async function setCollectionMode(on) {
+    if (homeTab !== "doujin") return;
     collectionMode = on;
     saveCollectionMode(on);
     syncCollectionBtn();
@@ -238,11 +297,19 @@ export function renderHome(root) {
       }
     }
     const end = pages.length >= total && total > 0;
-    renderList(end ? `<p class="hint" style="text-align:center">没有更多了</p>` : "");
+    renderDoujinList(end ? `<p class="hint" style="text-align:center">没有更多了</p>` : "");
+  }
+
+  async function setHomeTab(tab) {
+    homeTab = tab === "king" ? "king" : "doujin";
+    saveHomeTab(homeTab);
+    syncTabs();
+    listEl.innerHTML = `<div class="center">加载中…</div>`;
+    await refresh();
   }
 
   listEl.addEventListener("scroll", () => {
-    if (collectionMode) return;
+    if (homeTab !== "doujin" || collectionMode) return;
     if (listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 80) {
       loadMore();
     }
@@ -270,6 +337,9 @@ export function renderHome(root) {
     { passive: true },
   );
 
+  root.querySelectorAll(".home-tab").forEach((btn) => {
+    btn.onclick = () => setHomeTab(btn.dataset.tab);
+  });
   collectionBtn.onclick = () => setCollectionMode(!collectionMode);
   root.querySelector("#msg").onclick = () => go("/notifications");
   root.querySelector("#logout").onclick = () => dlg.classList.remove("hidden");
@@ -279,6 +349,6 @@ export function renderHome(root) {
     go("/login");
   };
 
-  syncCollectionBtn();
+  syncTabs();
   refresh();
 }

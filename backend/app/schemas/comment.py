@@ -10,7 +10,8 @@ class CommentCreate(BaseModel):
 
 class CommentOut(BaseModel):
     id: int
-    page_id: int
+    page_id: int | None = None
+    king_slot_id: int | None = None
     content: str
     created_at: datetime
     like_count: int

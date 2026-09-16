@@ -76,6 +76,7 @@ def _to_out(
     return CommentOut(
         id=comment.id,
         page_id=comment.page_id,
+        king_slot_id=comment.king_slot_id,
         content=comment.content,
         created_at=comment.created_at,
         like_count=like_count,
@@ -92,26 +93,13 @@ def _to_out(
     )
 
 
-def list_page_comments(
+def _assemble_comments(
     db: Session,
-    page_id: int,
+    comments: list[Comment],
     current_user_id: int | None,
     *,
-    sort: str = "latest",
+    sort: str,
 ) -> list[CommentOut]:
-    page = db.get(ComicPage, page_id)
-    if page is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="页面不存在")
-    if sort not in ("latest", "hot"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="排序参数无效")
-
-    comments = list(
-        db.scalars(
-            select(Comment)
-            .where(Comment.page_id == page_id)
-            .order_by(Comment.created_at.asc())
-        ).all()
-    )
     if not comments:
         return []
 
@@ -173,6 +161,54 @@ def list_page_comments(
     else:
         result.sort(key=lambda c: (c.created_at, c.id), reverse=True)
     return result
+
+
+def list_page_comments(
+    db: Session,
+    page_id: int,
+    current_user_id: int | None,
+    *,
+    sort: str = "latest",
+) -> list[CommentOut]:
+    page = db.get(ComicPage, page_id)
+    if page is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="页面不存在")
+    if sort not in ("latest", "hot"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="排序参数无效")
+
+    comments = list(
+        db.scalars(
+            select(Comment)
+            .where(Comment.page_id == page_id)
+            .order_by(Comment.created_at.asc())
+        ).all()
+    )
+    return _assemble_comments(db, comments, current_user_id, sort=sort)
+
+
+def list_slot_comments(
+    db: Session,
+    slot_id: int,
+    current_user_id: int | None,
+    *,
+    sort: str = "latest",
+) -> list[CommentOut]:
+    from app.models.king import KingSlot
+
+    slot = db.get(KingSlot, slot_id)
+    if slot is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="页面不存在")
+    if sort not in ("latest", "hot"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="排序参数无效")
+
+    comments = list(
+        db.scalars(
+            select(Comment)
+            .where(Comment.king_slot_id == slot_id)
+            .order_by(Comment.created_at.asc())
+        ).all()
+    )
+    return _assemble_comments(db, comments, current_user_id, sort=sort)
 
 
 def _resolve_parent_id(db: Session, page_id: int, parent_id: int | None) -> int | None:
@@ -257,6 +293,93 @@ def create_comment(
     )
 
 
+def _resolve_slot_parent_id(
+    db: Session, slot_id: int, parent_id: int | None
+) -> int | None:
+    if parent_id is None:
+        return None
+    parent = db.get(Comment, parent_id)
+    if parent is None or parent.king_slot_id != slot_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="回复目标不存在")
+    if parent.parent_id is not None:
+        return parent.parent_id
+    return parent.id
+
+
+def create_slot_comment(
+    db: Session,
+    *,
+    slot_id: int,
+    user_id: int,
+    content: str,
+    parent_id: int | None,
+) -> CommentOut:
+    from app.models.king import KingSlot
+
+    slot = db.get(KingSlot, slot_id)
+    if slot is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="页面不存在")
+    text = content.strip()
+    if not text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="评论不能为空")
+    if len(text) > 500:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="评论过长")
+
+    target: Comment | None = None
+    if parent_id is not None:
+        target = db.get(Comment, parent_id)
+        if target is None or target.king_slot_id != slot_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="回复目标不存在")
+
+    resolved_parent = _resolve_slot_parent_id(db, slot_id, parent_id)
+    reply_to_id = target.id if target is not None else None
+
+    comment = Comment(
+        page_id=None,
+        king_slot_id=slot_id,
+        user_id=user_id,
+        parent_id=resolved_parent,
+        reply_to_id=reply_to_id,
+        content=text,
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+
+    if target is not None:
+        notifications_service.create_notification(
+            db,
+            recipient_id=target.user_id,
+            actor_id=user_id,
+            notif_type="reply",
+            page_id=None,
+            king_slot_id=slot_id,
+            comment_id=comment.id,
+            preview=text,
+        )
+
+    user = db.get(User, user_id)
+    assert user is not None
+
+    rtid, rtnick, rtdel = None, None, False
+    if target is not None and target.parent_id is not None:
+        t_author = db.get(User, target.user_id)
+        if t_author is not None:
+            rtnick, _, rtdel = author_display(t_author)
+            rtid = target.id
+
+    return _to_out(
+        comment,
+        user,
+        like_count=0,
+        liked_by_me=False,
+        replies=[],
+        reply_to_id=rtid if rtid is not None else comment.reply_to_id,
+        reply_to_nickname=rtnick,
+        reply_to_author_deleted=rtdel,
+    )
+
+
 def delete_comment_cascade(db: Session, comment_id: int) -> bool:
     comment = db.get(Comment, comment_id)
     if comment is None:
@@ -298,6 +421,7 @@ def like_comment(db: Session, *, user_id: int, comment_id: int) -> tuple[bool, i
                 actor_id=user_id,
                 notif_type="like",
                 page_id=comment.page_id,
+                king_slot_id=comment.king_slot_id,
                 comment_id=comment.id,
                 preview=comment.content,
             )

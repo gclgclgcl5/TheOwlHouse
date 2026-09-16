@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.status import HTTP_303_SEE_OTHER
 
+from app.admin.auth import SESSION_KEY, is_admin
 from app.config import BASE_DIR, settings
 from app.database import get_db
 from app.services import app_update as app_update_service
@@ -20,7 +21,6 @@ from app.services.storage import save_comic_image
 router = APIRouter(prefix="/admin", tags=["admin-web"])
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-SESSION_KEY = "admin_logged_in"
 ADMIN_PAGES_PAGE_SIZE = 100
 
 
@@ -28,10 +28,6 @@ def _page_numbers(current: int, total_pages: int, *, radius: int = 2) -> list[in
     start = max(1, current - radius)
     end = min(total_pages, current + radius)
     return list(range(start, end + 1))
-
-
-def is_admin(request: Request) -> bool:
-    return bool(request.session.get(SESSION_KEY))
 
 
 def require_admin(request: Request) -> None:
@@ -130,7 +126,7 @@ def pages_list(
         name="admin_pages.html",
         context={
             "app_name": settings.app_name,
-            "title": "漫画管理",
+            "title": "同人漫画",
             "pages": [
                 pages_service.page_to_out(p, comment_count=counts.get(p.id, 0))
                 for p in items
@@ -155,7 +151,7 @@ def pages_new(request: Request):
         name="admin_page_form.html",
         context={
             "app_name": settings.app_name,
-            "title": "新增漫画页",
+            "title": "新增同人页",
             "page": None,
             "error": None,
             "action": "/admin/pages/new",
@@ -182,7 +178,7 @@ async def pages_create(
             name="admin_page_form.html",
             context={
                 "app_name": settings.app_name,
-                "title": "新增漫画页",
+                "title": "新增同人页",
                 "page": {"title": title},
                 "error": exc.detail,
                 "action": "/admin/pages/new",
@@ -212,7 +208,7 @@ def pages_edit(
         name="admin_page_form.html",
         context={
             "app_name": settings.app_name,
-            "title": "编辑漫画页",
+            "title": "编辑同人页",
             "page": pages_service.page_to_out(page),
             "error": None,
             "action": f"/admin/pages/{page_id}/edit",
@@ -247,7 +243,7 @@ async def pages_update(
             name="admin_page_form.html",
             context={
                 "app_name": settings.app_name,
-                "title": "编辑漫画页",
+                "title": "编辑同人页",
                 "page": pages_service.page_to_out(page),
                 "error": exc.detail,
                 "action": f"/admin/pages/{page_id}/edit",
@@ -301,6 +297,8 @@ def page_comments(
             "page": pages_service.page_to_out(page),
             "comments": items,
             "message": request.query_params.get("message"),
+            "back_href": "/admin/pages",
+            "back_label": "← 返回同人列表",
         },
     )
 
@@ -315,8 +313,14 @@ def comment_delete(
         return RedirectResponse(url="/admin/login", status_code=HTTP_303_SEE_OTHER)
     comment = comments_service.get_comment(db, comment_id)
     page_id = comment.page_id if comment is not None else None
+    slot_id = comment.king_slot_id if comment is not None else None
     if comment is not None:
         comments_service.delete_comment_cascade(db, comment_id)
+    if slot_id is not None:
+        return RedirectResponse(
+            url=f"/admin/king/slots/{slot_id}/comments?message=deleted",
+            status_code=HTTP_303_SEE_OTHER,
+        )
     if page_id is None:
         return RedirectResponse(url="/admin/pages", status_code=HTTP_303_SEE_OTHER)
     return RedirectResponse(
@@ -488,3 +492,8 @@ async def home_announcement_save(
         url="/admin/home-announcement?message=saved",
         status_code=HTTP_303_SEE_OTHER,
     )
+
+
+from app.admin.king import router as king_router
+
+router.include_router(king_router)

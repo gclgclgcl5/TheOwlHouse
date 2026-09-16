@@ -56,6 +56,10 @@ async def save_comic_image(upload: UploadFile) -> str:
     return await save_upload(upload, folder="comics", max_bytes=MAX_COMIC_BYTES)
 
 
+async def save_king_cover(upload: UploadFile) -> str:
+    return await save_upload(upload, folder="king_covers", max_bytes=MAX_COMIC_BYTES)
+
+
 def media_url(relative_path: str) -> str:
     normalized = relative_path.replace("\\", "/")
     return f"/media/{normalized}"

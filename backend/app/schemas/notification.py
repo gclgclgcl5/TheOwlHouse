@@ -11,7 +11,8 @@ class NotificationOut(BaseModel):
     actor_nickname: str
     actor_avatar_url: str
     actor_deleted: bool
-    page_id: int
+    page_id: int | None = None
+    king_slot_id: int | None = None
     comment_id: int | None
     comment_preview: str
     summary: str

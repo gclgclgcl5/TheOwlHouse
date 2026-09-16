@@ -117,6 +117,28 @@ export const api = {
   homeAnnouncement() {
     return request("/api/home-announcement");
   },
+  listKingVersions() {
+    return request("/api/king/versions");
+  },
+  listKingVersionPages(versionId) {
+    return request(`/api/king/versions/${versionId}/pages`);
+  },
+  resolveKingPage({ page_no, slot_id, preferred_version_id } = {}) {
+    const q = new URLSearchParams();
+    if (page_no != null) q.set("page_no", String(page_no));
+    if (slot_id != null) q.set("slot_id", String(slot_id));
+    if (preferred_version_id != null) q.set("preferred_version_id", String(preferred_version_id));
+    return request(`/api/king/resolve?${q}`);
+  },
+  listKingComments(slotId, sort = "latest") {
+    return request(`/api/king/slots/${slotId}/comments?sort=${encodeURIComponent(sort)}`);
+  },
+  createKingComment(slotId, content, parentId = null) {
+    return request(`/api/king/slots/${slotId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ content, parent_id: parentId }),
+    });
+  },
 };
 
 export function mediaUrl(path) {

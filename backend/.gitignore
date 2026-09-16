@@ -9,6 +9,7 @@ venv/
 data/*.db
 data/uploads/comics/*
 data/uploads/avatars/*
+data/uploads/king_covers/*
 !data/uploads/**/.gitkeep
 # 填写过密码/PAT 的部署手册不要进仓库
 docs/AI服务器部署手册.md

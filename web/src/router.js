@@ -7,6 +7,13 @@ export function parseHash() {
   if (parts[0] === "page" && parts[1]) {
     return { name: "page", pageId: Number(parts[1]) };
   }
+  if (parts[0] === "king" && parts[1]) {
+    const versionId = Number(parts[1]);
+    if (parts[2] === "slot" && parts[3]) {
+      return { name: "king", versionId, slotId: Number(parts[3]) };
+    }
+    return { name: "king", versionId, slotId: 0 };
+  }
   const name = parts[0] || "login";
   return { name };
 }

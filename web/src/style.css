@@ -103,6 +103,70 @@ button, input, textarea { font: inherit; }
   gap: 4px;
   flex-shrink: 0;
 }
+.home-tabs {
+  display: flex;
+  gap: 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(90, 122, 184, 0.45);
+  padding: 0 12px;
+}
+.home-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 650;
+  padding: 10px 8px 12px;
+  cursor: pointer;
+  position: relative;
+}
+.home-tab.on {
+  color: var(--accent);
+}
+.home-tab.on::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.version-card {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+.version-card img {
+  width: 72px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.version-card.current {
+  background: rgba(30, 58, 122, 0.9);
+}
+.version-card.current .title {
+  color: var(--accent);
+}
+.king-switch-banner {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 64px;
+  z-index: 5;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(11, 27, 74, 0.92);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-weight: 650;
+  text-align: center;
+  pointer-events: none;
+}
 .topbar h1, .marquee {
   flex: 1;
   margin: 0;

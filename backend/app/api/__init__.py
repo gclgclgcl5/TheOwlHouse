@@ -8,6 +8,7 @@ from app.api.app_update import router as app_update_router
 from app.api.auth import router as auth_router
 from app.api.comments import router as comments_router
 from app.api.home_announcement import router as home_announcement_router
+from app.api.king import router as king_router
 from app.api.notifications import router as notifications_router
 from app.api.pages import router as pages_router
 
@@ -26,6 +27,7 @@ router.include_router(admin_users_router)
 router.include_router(admin_comments_router)
 router.include_router(pages_router)
 router.include_router(comments_router)
+router.include_router(king_router)
 router.include_router(notifications_router)
 router.include_router(app_update_router)
 router.include_router(home_announcement_router)

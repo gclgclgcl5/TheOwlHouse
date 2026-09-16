@@ -9,7 +9,7 @@
 <body>
   <header class="top">
     <h1>{{ title }}</h1>
-    <p class="hint"><a class="back-link" href="/admin/pages">← 返回漫画列表</a> · 页序 {{ page.page_no }}</p>
+    <p class="hint"><a class="back-link" href="{{ back_href | default('/admin/pages') }}">{{ back_label | default('← 返回同人列表') }}</a> · 页序 {{ page.page_no }}</p>
   </header>
   <main>
     {% if message == "deleted" %}

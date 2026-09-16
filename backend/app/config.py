@@ -36,3 +36,4 @@ def ensure_data_dirs() -> None:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     (UPLOAD_DIR / "comics").mkdir(parents=True, exist_ok=True)
     (UPLOAD_DIR / "avatars").mkdir(parents=True, exist_ok=True)
+    (UPLOAD_DIR / "king_covers").mkdir(parents=True, exist_ok=True)

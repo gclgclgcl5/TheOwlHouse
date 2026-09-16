@@ -1,5 +1,5 @@
 import { api, mediaUrl } from "../api.js";
-import { isLoggedIn } from "../store.js";
+import { isLoggedIn, loadKingProgress } from "../store.js";
 import { go } from "../router.js";
 import { escapeHtml, avatarHtml } from "../util.js";
 
@@ -22,6 +22,24 @@ export function renderNotifications(root) {
   const listEl = root.querySelector("#list");
   root.querySelector("#back").onclick = () => go("/home");
 
+  async function openNotification(n) {
+    if (n.king_slot_id) {
+      const preferred = loadKingProgress().lastVersionId || undefined;
+      try {
+        const resolved = await api.resolveKingPage({
+          slot_id: n.king_slot_id,
+          preferred_version_id: preferred || null,
+        });
+        go(`/king/${resolved.version_id}/slot/${resolved.slot_id}`);
+      } catch {
+        go("/home");
+      }
+      return;
+    }
+    if (n.page_id) go(`/page/${n.page_id}`);
+    else go("/home");
+  }
+
   async function load() {
     try {
       const res = await api.listNotifications();
@@ -38,7 +56,7 @@ export function renderNotifications(root) {
             ? `<div class="sub">${escapeHtml(n.comment_preview)}</div>`
             : "";
           return `
-            <div class="notif${n.is_read ? " read" : ""}" data-id="${n.id}" data-page="${n.page_id}">
+            <div class="notif${n.is_read ? " read" : ""}" data-id="${n.id}" data-page="${n.page_id || ""}" data-slot="${n.king_slot_id || ""}">
               ${av}
               <div style="flex:1">
                 <div>${escapeHtml(n.summary)}</div>
@@ -51,13 +69,14 @@ export function renderNotifications(root) {
       listEl.querySelectorAll(".notif").forEach((el) => {
         el.onclick = async () => {
           const id = Number(el.dataset.id);
-          const page = Number(el.dataset.page);
+          const page = el.dataset.page ? Number(el.dataset.page) : 0;
+          const slot = el.dataset.slot ? Number(el.dataset.slot) : 0;
           try {
             if (!el.classList.contains("read")) await api.markNotificationRead(id);
           } catch {
             /* still open */
           }
-          go(`/page/${page}`);
+          await openNotification({ page_id: page || null, king_slot_id: slot || null });
         };
       });
     } catch (e) {

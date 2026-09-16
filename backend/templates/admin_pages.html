@@ -8,7 +8,7 @@
 </head>
 <body>
   <header class="top">
-    <h1>漫画管理</h1>
+    <h1>同人漫画</h1>
     <p class="hint">共 {{ total }} 页 · 每屏 {{ page_size }} 条 · 漫画图上限 20MB（jpg/png/webp/gif）</p>
     <p><a class="back-link" href="/admin/">← 返回首页</a></p>
   </header>
@@ -16,7 +16,7 @@
     {% if message %}
     <p class="ok">操作成功：{{ message }}</p>
     {% endif %}
-    <p><a class="button" href="/admin/pages/new">新增漫画页</a></p>
+    <p><a class="button" href="/admin/pages/new">新增同人页</a></p>
     {% if pages %}
     <div class="data-list data-list--pages">
       <div class="data-list__head">

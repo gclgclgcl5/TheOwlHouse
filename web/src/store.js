@@ -75,6 +75,55 @@ export function saveCommentsLayoutMode(mode) {
   localStorage.setItem(COMMENTS_LAYOUT_KEY, mode === "docked" ? "docked" : "immersive");
 }
 
+const HOME_TAB_KEY = "owlhouse_home_tab";
+
+/** 首页 Tab：doujin | king */
+export function loadHomeTab() {
+  const raw = localStorage.getItem(HOME_TAB_KEY);
+  return raw === "king" ? "king" : "doujin";
+}
+
+export function saveHomeTab(tab) {
+  localStorage.setItem(HOME_TAB_KEY, tab === "king" ? "king" : "doujin");
+}
+
+const KING_PROG_KEY = "owlhouse_king_progress";
+
+export function loadKingProgress() {
+  try {
+    const raw = localStorage.getItem(KING_PROG_KEY);
+    if (!raw) {
+      return { lastSlotId: 0, lastPageNo: 0, lastVersionId: 0, lastTitle: "" };
+    }
+    const o = JSON.parse(raw);
+    return {
+      lastSlotId: Number(o.lastSlotId) || 0,
+      lastPageNo: Number(o.lastPageNo) || 0,
+      lastVersionId: Number(o.lastVersionId) || 0,
+      lastTitle: String(o.lastTitle || ""),
+    };
+  } catch {
+    return { lastSlotId: 0, lastPageNo: 0, lastVersionId: 0, lastTitle: "" };
+  }
+}
+
+export function markKingRead({ slotId, page_no, title, versionId }) {
+  const cur = loadKingProgress();
+  const next = {
+    lastSlotId: slotId,
+    lastTitle: title || "",
+    lastVersionId: versionId || cur.lastVersionId || 0,
+    lastPageNo: page_no >= cur.lastPageNo ? page_no : cur.lastPageNo,
+  };
+  localStorage.setItem(KING_PROG_KEY, JSON.stringify(next));
+  return next;
+}
+
+export function isKingRead(page_no) {
+  const { lastPageNo } = loadKingProgress();
+  return lastPageNo > 0 && page_no <= lastPageNo;
+}
+
 const STRIP_ASPECT_THRESHOLD = 2.0;
 
 /** 高宽比（height/width）达到阈值时走条漫。 */
