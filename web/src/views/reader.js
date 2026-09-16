@@ -193,6 +193,12 @@ export function renderReader(root, source) {
     }
     setChrome(chromeOn);
     setCount(commentCount);
+    // 等 flex 高度落地后再按新舞台重算 fit/strip，避免普通页仍按整屏裁切
+    requestAnimationFrame(() => {
+      paintPages();
+      const pageEl = currentPageEl();
+      if (pageEl) pageEl.scrollTop = 0;
+    });
   }
 
   function windowIndices() {
@@ -210,17 +216,29 @@ export function renderReader(root, source) {
     return track.querySelector(`.reader-page[data-page-id="${p.id}"]`);
   }
 
+  /** 评论区舞台更矮：若按宽缩放后高度仍装得下，则用 fit 整页展示，避免被当成条漫裁切。 */
   function pageIsStrip(page) {
     if (!page) return false;
-    return effectiveStripMode(aspectById.get(page.id));
+    const aspect = aspectById.get(page.id);
+    if (!effectiveStripMode(aspect)) return false;
+    if (layoutMode === "docked") {
+      const stage = root.querySelector("#stage");
+      if (stage && aspect > 0) {
+        const scaledH = stage.clientWidth * aspect;
+        if (scaledH <= stage.clientHeight * 1.02) return false;
+      }
+    }
+    return true;
   }
 
   function applyPageClasses() {
     track.querySelectorAll(".reader-page").forEach((el) => {
       const id = Number(el.dataset.pageId);
-      const strip = effectiveStripMode(aspectById.get(id));
+      const page = pages.find((p) => p.id === id);
+      const strip = pageIsStrip(page || { id });
       el.classList.toggle("strip", strip);
       el.classList.toggle("fit", !strip);
+      if (!strip) el.scrollTop = 0;
     });
     applyZoomToDom();
   }
