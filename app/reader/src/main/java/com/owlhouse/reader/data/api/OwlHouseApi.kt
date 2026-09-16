@@ -79,6 +79,31 @@ interface OwlHouseApi {
 
     @GET("api/home-announcement")
     suspend fun getHomeAnnouncement(): HomeAnnouncementOut
+
+    @GET("api/king/versions")
+    suspend fun listKingVersions(): KingVersionListOut
+
+    @GET("api/king/versions/{id}/pages")
+    suspend fun listKingVersionPages(@Path("id") versionId: Int): KingPageListOut
+
+    @GET("api/king/resolve")
+    suspend fun resolveKingPage(
+        @Query("page_no") pageNo: Int? = null,
+        @Query("slot_id") slotId: Int? = null,
+        @Query("preferred_version_id") preferredVersionId: Int? = null,
+    ): KingResolveOut
+
+    @GET("api/king/slots/{id}/comments")
+    suspend fun listKingComments(
+        @Path("id") slotId: Int,
+        @Query("sort") sort: String = "latest",
+    ): CommentListOut
+
+    @POST("api/king/slots/{id}/comments")
+    suspend fun createKingComment(
+        @Path("id") slotId: Int,
+        @Body body: CommentCreate,
+    ): CommentOut
 }
 
 @Serializable
@@ -135,7 +160,8 @@ data class CommentCreate(
 @Serializable
 data class CommentOut(
     val id: Int,
-    @SerialName("page_id") val pageId: Int,
+    @SerialName("page_id") val pageId: Int? = null,
+    @SerialName("king_slot_id") val kingSlotId: Int? = null,
     val content: String,
     @SerialName("created_at") val createdAt: String,
     @SerialName("like_count") val likeCount: Int,
@@ -171,7 +197,8 @@ data class NotificationOut(
     @SerialName("actor_nickname") val actorNickname: String,
     @SerialName("actor_avatar_url") val actorAvatarUrl: String = "",
     @SerialName("actor_deleted") val actorDeleted: Boolean = false,
-    @SerialName("page_id") val pageId: Int,
+    @SerialName("page_id") val pageId: Int? = null,
+    @SerialName("king_slot_id") val kingSlotId: Int? = null,
     @SerialName("comment_id") val commentId: Int? = null,
     @SerialName("comment_preview") val commentPreview: String = "",
     val summary: String,
@@ -209,4 +236,47 @@ data class AppUpdateOut(
 data class HomeAnnouncementOut(
     val title: String,
     @SerialName("updated_at") val updatedAt: String? = null,
+)
+
+@Serializable
+data class KingVersionOut(
+    val id: Int,
+    val name: String,
+    @SerialName("cover_url") val coverUrl: String,
+    @SerialName("is_default") val isDefault: Boolean = false,
+    @SerialName("uploaded_count") val uploadedCount: Int = 0,
+    @SerialName("created_at") val createdAt: String = "",
+)
+
+@Serializable
+data class KingVersionListOut(
+    val items: List<KingVersionOut>,
+)
+
+@Serializable
+data class KingPageOut(
+    @SerialName("slot_id") val slotId: Int,
+    @SerialName("page_no") val pageNo: Int,
+    val title: String,
+    @SerialName("image_url") val imageUrl: String,
+    @SerialName("comment_count") val commentCount: Int = 0,
+)
+
+@Serializable
+data class KingPageListOut(
+    @SerialName("version_id") val versionId: Int,
+    @SerialName("version_name") val versionName: String,
+    val items: List<KingPageOut>,
+)
+
+@Serializable
+data class KingResolveOut(
+    @SerialName("version_id") val versionId: Int,
+    @SerialName("version_name") val versionName: String,
+    val switched: Boolean = false,
+    @SerialName("slot_id") val slotId: Int,
+    @SerialName("page_no") val pageNo: Int,
+    val title: String,
+    @SerialName("image_url") val imageUrl: String,
+    @SerialName("comment_count") val commentCount: Int = 0,
 )

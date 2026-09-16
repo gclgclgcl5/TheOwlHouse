@@ -22,6 +22,7 @@ router = APIRouter(prefix="/admin", tags=["admin-web"])
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 ADMIN_PAGES_PAGE_SIZE = 100
+ADMIN_USERS_PAGE_SIZE = 50
 
 
 def _page_numbers(current: int, total_pages: int, *, radius: int = 2) -> list[int]:
@@ -332,11 +333,20 @@ def comment_delete(
 @router.get("/users", response_class=HTMLResponse, response_model=None)
 def users_list(
     request: Request,
+    page: int = 1,
     db: Session = Depends(get_db),
 ):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=HTTP_303_SEE_OTHER)
-    items, total = users_service.list_active_users(db, limit=100, offset=0)
+    page_size = ADMIN_USERS_PAGE_SIZE
+    page = max(1, page)
+    offset = (page - 1) * page_size
+    items, total = users_service.list_active_users(db, limit=page_size, offset=offset)
+    total_pages = max(1, (total + page_size - 1) // page_size) if total else 1
+    if page > total_pages:
+        page = total_pages
+        offset = (page - 1) * page_size
+        items, total = users_service.list_active_users(db, limit=page_size, offset=offset)
     return templates.TemplateResponse(
         request=request,
         name="admin_users.html",
@@ -345,8 +355,94 @@ def users_list(
             "title": "用户管理",
             "users": [users_service.user_to_admin_out(u) for u in items],
             "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "page_numbers": _page_numbers(page, total_pages),
             "message": request.query_params.get("message"),
         },
+    )
+
+
+@router.get("/users/{user_id}/password", response_class=HTMLResponse, response_model=None)
+def users_password_form(
+    request: Request,
+    user_id: int,
+    page: int = 1,
+    db: Session = Depends(get_db),
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=HTTP_303_SEE_OTHER)
+    user = users_service.get_active_user(db, user_id)
+    if user is None:
+        return RedirectResponse(
+            url=f"/admin/users?message=missing&page={max(1, page)}",
+            status_code=HTTP_303_SEE_OTHER,
+        )
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_user_password.html",
+        context={
+            "app_name": settings.app_name,
+            "title": "修改密码",
+            "user": users_service.user_to_admin_out(user),
+            "page": max(1, page),
+            "error": None,
+            "action": f"/admin/users/{user_id}/password",
+        },
+    )
+
+
+@router.post("/users/{user_id}/password", response_model=None)
+def users_password_update(
+    request: Request,
+    user_id: int,
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+    page: int = Form(1),
+    db: Session = Depends(get_db),
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=HTTP_303_SEE_OTHER)
+    page = max(1, page)
+    user = users_service.get_active_user(db, user_id)
+    if user is None:
+        return RedirectResponse(
+            url=f"/admin/users?message=missing&page={page}",
+            status_code=HTTP_303_SEE_OTHER,
+        )
+
+    def render_error(message: str):
+        return templates.TemplateResponse(
+            request=request,
+            name="admin_user_password.html",
+            context={
+                "app_name": settings.app_name,
+                "title": "修改密码",
+                "user": users_service.user_to_admin_out(user),
+                "page": page,
+                "error": message,
+                "action": f"/admin/users/{user_id}/password",
+            },
+            status_code=400,
+        )
+
+    password = password.strip()
+    password_confirm = password_confirm.strip()
+    if len(password) < 4 or len(password) > 128:
+        return render_error("密码长度需为 4～128 个字符")
+    if password != password_confirm:
+        return render_error("两次输入的密码不一致")
+
+    updated = users_service.set_password(db, user_id, password)
+    if updated is None:
+        return RedirectResponse(
+            url=f"/admin/users?message=missing&page={page}",
+            status_code=HTTP_303_SEE_OTHER,
+        )
+    return RedirectResponse(
+        url=f"/admin/users?message=password_updated&page={page}",
+        status_code=HTTP_303_SEE_OTHER,
     )
 
 
@@ -354,14 +450,16 @@ def users_list(
 def users_delete(
     request: Request,
     user_id: int,
+    page: int = Form(1),
     db: Session = Depends(get_db),
 ):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=HTTP_303_SEE_OTHER)
+    page = max(1, page)
     deleted = users_service.soft_delete_user(db, user_id)
     message = "deleted" if deleted is not None else "missing"
     return RedirectResponse(
-        url=f"/admin/users?message={message}",
+        url=f"/admin/users?message={message}&page={page}",
         status_code=HTTP_303_SEE_OTHER,
     )
 

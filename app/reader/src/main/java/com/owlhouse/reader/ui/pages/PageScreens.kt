@@ -124,12 +124,14 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import com.owlhouse.reader.OwlHouseApp
 import com.owlhouse.reader.config.AppConfig
+import com.owlhouse.reader.data.HomeTabStore
 import com.owlhouse.reader.data.ImageGallerySaver
 import com.owlhouse.reader.data.ReaderDisplayMode
 import com.owlhouse.reader.data.api.ApiClient
 import com.owlhouse.reader.data.api.ComicPageOut
 import com.owlhouse.reader.data.api.CommentCreate
 import com.owlhouse.reader.data.api.CommentOut
+import com.owlhouse.reader.data.api.KingVersionOut
 import com.owlhouse.reader.data.api.userFacingError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -165,6 +167,7 @@ private fun groupPagesByExactTitle(pages: List<ComicPageOut>): List<TitleCollect
 @Composable
 fun PageListScreen(
     onOpenPage: (Int) -> Unit,
+    onOpenKing: (versionId: Int, slotId: Int) -> Unit,
     onOpenNotifications: () -> Unit,
     onLogout: () -> Unit,
     onSessionExpired: () -> Unit,
@@ -172,7 +175,9 @@ fun PageListScreen(
     val context = LocalContext.current
     val app = context.applicationContext as OwlHouseApp
     val scope = rememberCoroutineScope()
+    var homeTab by remember { mutableStateOf(app.homeTab.tab) }
     var pages by remember { mutableStateOf<List<ComicPageOut>>(emptyList()) }
+    var kingVersions by remember { mutableStateOf<List<KingVersionOut>>(emptyList()) }
     var total by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
@@ -185,24 +190,42 @@ fun PageListScreen(
     var lastPageId by remember { mutableIntStateOf(app.readingProgress.lastPageId) }
     var lastPageNo by remember { mutableIntStateOf(app.readingProgress.lastPageNo) }
     var lastTitle by remember { mutableStateOf(app.readingProgress.lastTitle) }
+    var lastKingVersionId by remember { mutableIntStateOf(app.kingProgress.lastVersionId) }
     var syncingToProgress by remember { mutableStateOf(false) }
+    var usingOfflineCache by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val isKingTab = homeTab == HomeTabStore.TAB_KING
+    val latestIsKingTab = rememberUpdatedState(isKingTab)
 
     fun reloadProgress() {
         lastPageId = app.readingProgress.lastPageId
         lastPageNo = app.readingProgress.lastPageNo
         lastTitle = app.readingProgress.lastTitle
+        lastKingVersionId = app.kingProgress.lastVersionId
+    }
+
+    fun noteOfflineCache(fromCache: Boolean) {
+        if (fromCache) {
+            usingOfflineCache = true
+            if (!app.offlineHintShownThisProcess) {
+                app.offlineHintShownThisProcess = true
+                Toast.makeText(context, "留作纪念，后会有期！", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            usingOfflineCache = false
+        }
     }
 
     suspend fun fetchPages(offset: Int) =
-        ApiClient.api.listPages(limit = LIST_PAGE_SIZE, offset = offset, order = "page_no")
+        app.offline.listPages(limit = LIST_PAGE_SIZE, offset = offset, order = "page_no")
 
     suspend fun ensureAllPagesLoaded() {
         while (pages.size < total) {
             val res = fetchPages(pages.size)
-            if (res.items.isEmpty()) break
-            pages = pages + res.items
-            total = res.total
+            noteOfflineCache(res.fromCache)
+            if (res.data.items.isEmpty()) break
+            pages = pages + res.data.items
+            total = res.data.total
         }
     }
 
@@ -215,9 +238,10 @@ fun PageListScreen(
         try {
             while (pages.none { it.id == targetId } && pages.size < total) {
                 val res = fetchPages(pages.size)
-                if (res.items.isEmpty()) break
-                pages = pages + res.items
-                total = res.total
+                noteOfflineCache(res.fromCache)
+                if (res.data.items.isEmpty()) break
+                pages = pages + res.data.items
+                total = res.data.total
             }
             if (collectionMode) {
                 ensureAllPagesLoaded()
@@ -245,7 +269,7 @@ fun PageListScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 reloadProgress()
                 scope.launch {
-                    if (!loading && pages.isNotEmpty()) {
+                    if (!latestIsKingTab.value && !loading && pages.isNotEmpty()) {
                         ensureAndScrollToProgress()
                     }
                 }
@@ -265,25 +289,57 @@ fun PageListScreen(
         }
     }
 
-    fun refresh() {
+    suspend fun refreshMeta() {
+        try {
+            unread = ApiClient.api.unreadCount().count
+        } catch (_: Exception) {
+            // 未读角标失败不打断首页
+        }
+        try {
+            val announcement = ApiClient.api.getHomeAnnouncement()
+            val remote = announcement.title.trim()
+            if (remote.isNotBlank()) {
+                app.homeAnnouncement.title = remote
+                homeTitle = remote
+            }
+        } catch (_: Exception) {
+            // 公告拉取失败时保留缓存/当前标题
+        }
+    }
+
+    fun refreshKing() {
+        scope.launch {
+            refreshing = true
+            error = null
+            try {
+                kingVersions = ApiClient.api.listKingVersions().items
+                refreshMeta()
+                reloadProgress()
+            } catch (e: Exception) {
+                if (!app.tokenStore.isLoggedIn) {
+                    onSessionExpired()
+                    return@launch
+                }
+                error = userFacingError(e, "加载失败")
+            } finally {
+                refreshing = false
+                loading = false
+            }
+        }
+    }
+
+    fun refreshDoujin() {
         scope.launch {
             refreshing = true
             error = null
             var ok = false
             try {
                 val res = fetchPages(0)
-                pages = res.items
-                total = res.total
-                unread = ApiClient.api.unreadCount().count
-                try {
-                    val announcement = ApiClient.api.getHomeAnnouncement()
-                    val remote = announcement.title.trim()
-                    if (remote.isNotBlank()) {
-                        app.homeAnnouncement.title = remote
-                        homeTitle = remote
-                    }
-                } catch (_: Exception) {
-                    // 公告拉取失败时保留缓存/当前标题
+                noteOfflineCache(res.fromCache)
+                pages = res.data.items
+                total = res.data.total
+                if (!res.fromCache) {
+                    refreshMeta()
                 }
                 if (collectionMode) {
                     ensureAllPagesLoaded()
@@ -307,16 +363,31 @@ fun PageListScreen(
         }
     }
 
+    fun refresh(forTab: String = homeTab) {
+        if (forTab == HomeTabStore.TAB_KING) refreshKing() else refreshDoujin()
+    }
+
+    fun switchTab(tab: String) {
+        val next = if (tab == HomeTabStore.TAB_KING) HomeTabStore.TAB_KING else HomeTabStore.TAB_DOUJIN
+        if (next == homeTab) return
+        homeTab = next
+        app.homeTab.tab = next
+        loading = true
+        error = null
+        refresh(next)
+    }
+
     fun loadMore() {
-        if (collectionMode) return
+        if (isKingTab || collectionMode) return
         if (loadingMore || refreshing || loading || syncingToProgress || pages.isEmpty()) return
         if (pages.size >= total) return
         scope.launch {
             loadingMore = true
             try {
                 val res = fetchPages(pages.size)
-                pages = pages + res.items
-                total = res.total
+                noteOfflineCache(res.fromCache)
+                pages = pages + res.data.items
+                total = res.data.total
             } catch (e: Exception) {
                 if (!app.tokenStore.isLoggedIn) {
                     onSessionExpired()
@@ -360,7 +431,8 @@ fun PageListScreen(
         }
     }
 
-    LaunchedEffect(listState) {
+    LaunchedEffect(listState, isKingTab, collectionMode) {
+        if (isKingTab) return@LaunchedEffect
         snapshotFlow {
             val info = listState.layoutInfo
             val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -376,11 +448,12 @@ fun PageListScreen(
     }
 
     val pullState = rememberPullRefreshState(refreshing, onRefresh = { refresh() })
-    val hasProgress = lastPageId > 0
-    val endReached = pages.isNotEmpty() && pages.size >= total && total > 0
-    val collections = remember(pages, collectionMode) {
-        if (collectionMode) groupPagesByExactTitle(pages) else emptyList()
+    val hasProgress = !isKingTab && lastPageId > 0
+    val endReached = !isKingTab && pages.isNotEmpty() && pages.size >= total && total > 0
+    val collections = remember(pages, collectionMode, isKingTab) {
+        if (!isKingTab && collectionMode) groupPagesByExactTitle(pages) else emptyList()
     }
+    val selectedTabIndex = if (isKingTab) 1 else 0
 
     if (confirmLogout) {
         AlertDialog(
@@ -435,18 +508,21 @@ fun PageListScreen(
                     )
                     IconButton(
                         onClick = { setCollectionMode(!collectionMode) },
+                        enabled = !isKingTab,
                         modifier = Modifier.size(48.dp),
                     ) {
-                        Icon(
-                            imageVector = if (collectionMode) Icons.Filled.Layers else Icons.Outlined.Layers,
-                            contentDescription = if (collectionMode) "合集模式已开" else "合集模式",
-                            tint = if (collectionMode) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onBackground
-                            },
-                            modifier = Modifier.size(26.dp),
-                        )
+                        if (!isKingTab) {
+                            Icon(
+                                imageVector = if (collectionMode) Icons.Filled.Layers else Icons.Outlined.Layers,
+                                contentDescription = if (collectionMode) "合集模式已开" else "合集模式",
+                                tint = if (collectionMode) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onBackground
+                                },
+                                modifier = Modifier.size(26.dp),
+                            )
+                        }
                     }
                     Box(
                         modifier = Modifier
@@ -486,6 +562,28 @@ fun PageListScreen(
                         )
                     }
                 }
+                TabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    containerColor = MaterialTheme.colorScheme.background,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    indicator = { tabPositions ->
+                        TabRowDefaults.SecondaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    },
+                ) {
+                    Tab(
+                        selected = !isKingTab,
+                        onClick = { switchTab(HomeTabStore.TAB_DOUJIN) },
+                        text = { Text("同人漫画") },
+                    )
+                    Tab(
+                        selected = isKingTab,
+                        onClick = { switchTab(HomeTabStore.TAB_KING) },
+                        text = { Text("长寿之王") },
+                    )
+                }
             }
         },
     ) { padding ->
@@ -498,6 +596,31 @@ fun PageListScreen(
             when {
                 loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
+                }
+                isKingTab && error != null && kingVersions.isEmpty() -> Box(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(error ?: "", color = MaterialTheme.colorScheme.error)
+                }
+                isKingTab && kingVersions.isEmpty() -> Box(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("暂无内容，请先在管理后台创建长寿之王版本。")
+                }
+                isKingTab -> LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(kingVersions, key = { it.id }) { version ->
+                        KingVersionCard(
+                            version = version,
+                            isLastRead = lastKingVersionId > 0 && version.id == lastKingVersionId,
+                            onClick = { onOpenKing(version.id, 0) },
+                        )
+                    }
                 }
                 error != null && pages.isEmpty() -> Box(
                     modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -531,6 +654,7 @@ fun PageListScreen(
                             val allRead = lastPageNo > 0 && col.pages.all { it.pageNo <= lastPageNo }
                             CollectionListItem(
                                 collection = col,
+                                imageModel = app.offline.imageModel(col.cover),
                                 isRead = allRead,
                                 isCurrent = isCurrent,
                                 onClick = { openCollection(col) },
@@ -542,6 +666,7 @@ fun PageListScreen(
                             val isCurrent = page.id == lastPageId
                             PageListItem(
                                 page = page,
+                                imageModel = app.offline.imageModel(page),
                                 isRead = read,
                                 isCurrent = isCurrent,
                                 onClick = { onOpenPage(page.id) },
@@ -587,6 +712,65 @@ fun PageListScreen(
 }
 
 @Composable
+private fun KingVersionCard(
+    version: KingVersionOut,
+    isLastRead: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(
+                if (isLastRead) {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)
+                } else {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                },
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AsyncImage(
+            model = AppConfig.mediaUrl(version.coverUrl),
+            contentDescription = version.name,
+            modifier = Modifier
+                .width(72.dp)
+                .height(72.dp)
+                .clip(RoundedCornerShape(12.dp)),
+            contentScale = ContentScale.Crop,
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = if (version.isDefault) "${version.name} · 默认" else version.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = if (isLastRead) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = buildString {
+                    append("已上传 ${version.uploadedCount} 页")
+                    if (isLastRead) append(" · 上次阅读")
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isLastRead) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
 private fun ContinueReadingCard(
     title: String,
     onClick: () -> Unit,
@@ -617,6 +801,7 @@ private fun ContinueReadingCard(
 @Composable
 private fun PageListItem(
     page: ComicPageOut,
+    imageModel: Any,
     isRead: Boolean,
     isCurrent: Boolean,
     onClick: () -> Unit,
@@ -642,7 +827,7 @@ private fun PageListItem(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AsyncImage(
-            model = AppConfig.mediaUrl(page.imageUrl),
+            model = imageModel,
             contentDescription = page.title,
             modifier = Modifier
                 .width(72.dp)
@@ -680,6 +865,7 @@ private fun PageListItem(
 @Composable
 private fun CollectionListItem(
     collection: TitleCollection,
+    imageModel: Any,
     isRead: Boolean,
     isCurrent: Boolean,
     onClick: () -> Unit,
@@ -705,7 +891,7 @@ private fun CollectionListItem(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AsyncImage(
-            model = AppConfig.mediaUrl(collection.cover.imageUrl),
+            model = imageModel,
             contentDescription = collection.title,
             modifier = Modifier
                 .width(72.dp)
@@ -756,7 +942,7 @@ private val DOCKED_INPUT_RESERVE_HEIGHT = 48.dp
 
 @Composable
 private fun ZoomableReaderImage(
-    imageUrl: String,
+    imageModel: Any,
     contentDescription: String?,
     useStrip: Boolean,
     heightOverWidth: Float?,
@@ -800,7 +986,7 @@ private fun ZoomableReaderImage(
         contentAlignment = if (useStrip) Alignment.TopCenter else Alignment.Center,
     ) {
         AsyncImage(
-            model = imageUrl,
+            model = imageModel,
             contentDescription = contentDescription,
             modifier = imageModifier
                 .graphicsLayer {
@@ -863,6 +1049,9 @@ fun PageReaderScreen(
     var catalogHasMore by remember { mutableStateOf(false) }
     var catalogLoadingMore by remember { mutableStateOf(false) }
     var savingImage by remember { mutableStateOf(false) }
+    var usingOfflineCache by remember { mutableStateOf(false) }
+    var commentsFromCache by remember { mutableStateOf(false) }
+    var imageTick by remember { mutableIntStateOf(0) }
     var readerScale by remember { mutableFloatStateOf(1f) }
     var readerOffset by remember { mutableStateOf(Offset.Zero) }
     val aspectByPageId = remember { mutableStateMapOf<Int, Float>() }
@@ -883,6 +1072,18 @@ fun PageReaderScreen(
     val gesturesBlocked = !dockedMode && commentsOpen
     val configuration = LocalConfiguration.current
     val previewMaxHeight = (configuration.screenHeightDp * 0.2f).dp
+
+    fun noteOfflineCache(fromCache: Boolean) {
+        if (fromCache) {
+            usingOfflineCache = true
+            if (!app.offlineHintShownThisProcess) {
+                app.offlineHintShownThisProcess = true
+                Toast.makeText(context, "留作纪念，后会有期！", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            usingOfflineCache = false
+        }
+    }
 
     fun doSaveCurrentPage() {
         val page = currentPage ?: return
@@ -944,16 +1145,20 @@ fun PageReaderScreen(
             catalogTotal = 0
             nextOffset = 0
             catalogHasMore = false
+            usingOfflineCache = false
             try {
                 val loaded = mutableListOf<ComicPageOut>()
                 var loadedCount = 0
                 var total = 0
+                var fromCache = false
                 while (true) {
-                    val res = ApiClient.api.listPages(
+                    val cached = app.offline.listPages(
                         limit = READER_PAGE_BATCH,
                         offset = loadedCount,
                         order = "page_no",
                     )
+                    if (cached.fromCache) fromCache = true
+                    val res = cached.data
                     if (res.items.isEmpty()) break
                     loaded += res.items
                     total = res.total
@@ -971,14 +1176,16 @@ fun PageReaderScreen(
                     pages = emptyList()
                 } else {
                     pages = if (loadedPages.none { it.id == targetPageId }) {
-                        val one = ApiClient.api.getPage(targetPageId)
-                        (loadedPages + one).distinctBy { it.id }.sortedBy { it.pageNo }
+                        val one = app.offline.getPage(targetPageId)
+                        if (one.fromCache) fromCache = true
+                        (loadedPages + one.data).distinctBy { it.id }.sortedBy { it.pageNo }
                     } else {
                         loadedPages
                     }
                     catalogTotal = maxOf(total, pages.size)
                     nextOffset = loadedCount
                     catalogHasMore = loadedCount < catalogTotal
+                    noteOfflineCache(fromCache)
                 }
             } catch (e: Exception) {
                 if (!app.tokenStore.isLoggedIn) {
@@ -997,11 +1204,13 @@ fun PageReaderScreen(
         scope.launch {
             catalogLoadingMore = true
             try {
-                val res = ApiClient.api.listPages(
+                val cached = app.offline.listPages(
                     limit = READER_PAGE_BATCH,
                     offset = nextOffset,
                     order = "page_no",
                 )
+                if (cached.fromCache) noteOfflineCache(true)
+                val res = cached.data
                 if (res.items.isEmpty()) {
                     catalogHasMore = false
                     return@launch
@@ -1031,10 +1240,12 @@ fun PageReaderScreen(
         commentsLoadJob.job = scope.launch {
             try {
                 val sort = if (dockedMode || sortTab == 1) "hot" else "latest"
-                val items = ApiClient.api.listComments(forPageId, sort = sort).items
+                val cached = app.offline.listComments(forPageId, sort = sort)
                 if (forPageId != latestPageId.value) return@launch
-                comments = items
-                commentCount = items.size
+                comments = cached.data
+                commentCount = cached.data.size
+                commentsFromCache = cached.fromCache
+                if (cached.fromCache) noteOfflineCache(true)
                 if (dockedMode) {
                     previewVisibleCount = PREVIEW_BATCH
                 }
@@ -1046,6 +1257,7 @@ fun PageReaderScreen(
                     onSessionExpired()
                     return@launch
                 }
+                commentsFromCache = false
                 actionError = userFacingError(e, "评论加载失败")
             } finally {
                 if (forPageId == latestPageId.value) {
@@ -1059,9 +1271,9 @@ fun PageReaderScreen(
         commentsLoadJob.job?.cancel()
         commentsLoadJob.job = scope.launch {
             try {
-                val count = ApiClient.api.listComments(forPageId, sort = "latest").items.size
+                val cached = app.offline.listComments(forPageId, sort = "latest")
                 if (forPageId != latestPageId.value) return@launch
-                commentCount = count
+                commentCount = cached.data.size
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1103,9 +1315,84 @@ fun PageReaderScreen(
         draft = ""
     }
 
+    fun updateCommentLike(targetId: Int, liked: Boolean, count: Int) {
+        fun mapOne(c: CommentOut): CommentOut {
+            val self = if (c.id == targetId) c.copy(likedByMe = liked, likeCount = count) else c
+            return self.copy(
+                replies = self.replies.map { r ->
+                    if (r.id == targetId) r.copy(likedByMe = liked, likeCount = count) else r
+                },
+            )
+        }
+        comments = comments.map(::mapOne)
+    }
+
     fun openComposer(target: CommentOut?) {
+        if (commentsFromCache || usingOfflineCache) {
+            actionError = "离线无法操作"
+            return
+        }
         replyTo = target
         composerOpen = true
+    }
+
+    fun onToggleCommentLike(comment: CommentOut) {
+        if (commentsFromCache || usingOfflineCache) {
+            actionError = "离线无法操作"
+            return
+        }
+        scope.launch {
+            try {
+                if (comment.likedByMe) {
+                    ApiClient.api.unlikeComment(comment.id)
+                    updateCommentLike(
+                        comment.id,
+                        false,
+                        (comment.likeCount - 1).coerceAtLeast(0),
+                    )
+                } else {
+                    val state = ApiClient.api.likeComment(comment.id)
+                    updateCommentLike(comment.id, state.liked, state.likeCount)
+                }
+            } catch (e: Exception) {
+                if (!app.tokenStore.isLoggedIn) {
+                    onSessionExpired()
+                    return@launch
+                }
+                actionError = userFacingError(e, "点赞失败")
+            }
+        }
+    }
+
+    fun onSendComment() {
+        val text = draft.trim()
+        if (text.isEmpty() || sending) return
+        if (commentsFromCache || usingOfflineCache) {
+            actionError = "离线无法操作"
+            return
+        }
+        scope.launch {
+            sending = true
+            actionError = null
+            try {
+                ApiClient.api.createComment(
+                    currentPageId,
+                    CommentCreate(content = text, parentId = replyTo?.id),
+                )
+                draft = ""
+                replyTo = null
+                if (dockedMode) composerOpen = false
+                refreshComments(currentPageId)
+            } catch (e: Exception) {
+                if (!app.tokenStore.isLoggedIn) {
+                    onSessionExpired()
+                    return@launch
+                }
+                actionError = userFacingError(e, "发送失败")
+            } finally {
+                sending = false
+            }
+        }
     }
 
     LaunchedEffect(pageId) {
@@ -1149,6 +1436,13 @@ fun PageReaderScreen(
         }
     }
 
+    LaunchedEffect(currentPageId, pagerReady, pages) {
+        if (!pagerReady) return@LaunchedEffect
+        val page = pages.firstOrNull { it.id == currentPageId } ?: return@LaunchedEffect
+        app.offline.ensurePageImage(page)
+        imageTick += 1
+    }
+
     LaunchedEffect(chromeTick) {
         if (!chromeVisible || commentsOpen) return@LaunchedEffect
         delay(3000)
@@ -1170,69 +1464,6 @@ fun PageReaderScreen(
 
     BackHandler(enabled = dockedMode && composerOpen) {
         closeComposer()
-    }
-
-    fun updateCommentLike(targetId: Int, liked: Boolean, count: Int) {
-        fun mapOne(c: CommentOut): CommentOut {
-            val self = if (c.id == targetId) c.copy(likedByMe = liked, likeCount = count) else c
-            return self.copy(
-                replies = self.replies.map { r ->
-                    if (r.id == targetId) r.copy(likedByMe = liked, likeCount = count) else r
-                },
-            )
-        }
-        comments = comments.map(::mapOne)
-    }
-
-    fun onToggleCommentLike(comment: CommentOut) {
-        scope.launch {
-            try {
-                if (comment.likedByMe) {
-                    ApiClient.api.unlikeComment(comment.id)
-                    updateCommentLike(
-                        comment.id,
-                        false,
-                        (comment.likeCount - 1).coerceAtLeast(0),
-                    )
-                } else {
-                    val state = ApiClient.api.likeComment(comment.id)
-                    updateCommentLike(comment.id, state.liked, state.likeCount)
-                }
-            } catch (e: Exception) {
-                if (!app.tokenStore.isLoggedIn) {
-                    onSessionExpired()
-                    return@launch
-                }
-                actionError = userFacingError(e, "点赞失败")
-            }
-        }
-    }
-
-    fun onSendComment() {
-        val text = draft.trim()
-        if (text.isEmpty() || sending) return
-        scope.launch {
-            sending = true
-            actionError = null
-            try {
-                ApiClient.api.createComment(
-                    currentPageId,
-                    CommentCreate(content = text, parentId = replyTo?.id),
-                )
-                draft = ""
-                replyTo = null
-                if (dockedMode) composerOpen = false
-                refreshComments(currentPageId)
-            } catch (e: Exception) {
-                if (!app.tokenStore.isLoggedIn) {
-                    onSessionExpired()
-                    return@launch
-                }
-                actionError = userFacingError(e, "发送失败")
-            } finally {
-                sending = false
-            }
-        }
     }
 
     Box(
@@ -1272,7 +1503,11 @@ fun PageReaderScreen(
                             val useStrip = ReaderDisplayMode.effectiveStrip(heightOverWidth)
                             val isSettledPage = index == pagerState.settledPage
                             ZoomableReaderImage(
-                                imageUrl = AppConfig.mediaUrl(item.imageUrl),
+                                imageModel = run {
+                                    // imageTick：确保页图下载完成后刷新显示本地文件
+                                    imageTick
+                                    app.offline.imageModel(item)
+                                },
                                 contentDescription = item.title,
                                 useStrip = useStrip,
                                 heightOverWidth = heightOverWidth,
@@ -1295,6 +1530,7 @@ fun PageReaderScreen(
                     comments = comments,
                     commentsLoading = commentsLoading,
                     visibleCount = previewVisibleCount,
+                    interactionsEnabled = !commentsFromCache && !usingOfflineCache,
                     onLoadMore = {
                         if (previewVisibleCount < comments.size) {
                             previewVisibleCount = (previewVisibleCount + PREVIEW_BATCH)
@@ -1318,6 +1554,7 @@ fun PageReaderScreen(
         if (dockedMode) {
             if (!composerOpen) {
                 CommentEntryBar(
+                    enabled = !commentsFromCache && !usingOfflineCache,
                     onOpen = { openComposer(null) },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -1331,6 +1568,7 @@ fun PageReaderScreen(
                     onDraftChange = { if (it.length <= 500) draft = it },
                     replyTo = replyTo,
                     sending = sending,
+                    enabled = !commentsFromCache && !usingOfflineCache,
                     onSend = ::onSendComment,
                     onDismiss = { closeComposer() },
                     modifier = Modifier
@@ -1459,6 +1697,7 @@ fun PageReaderScreen(
                 onReplyToChange = { replyTo = it },
                 sending = sending,
                 actionError = actionError,
+                interactionsEnabled = !commentsFromCache && !usingOfflineCache,
                 onClose = { closeComments() },
                 onToggleLike = ::onToggleCommentLike,
                 onSend = ::onSendComment,
@@ -1472,6 +1711,7 @@ private fun CommentPreviewStrip(
     comments: List<CommentOut>,
     commentsLoading: Boolean,
     visibleCount: Int,
+    interactionsEnabled: Boolean = true,
     onLoadMore: () -> Unit,
     onToggleLike: (CommentOut) -> Unit,
     onOpenReply: (CommentOut) -> Unit,
@@ -1571,6 +1811,7 @@ private fun CommentPreviewStrip(
                             comment = c,
                             indented = false,
                             bodyExpanded = c.id in expandedBodies,
+                            interactionsEnabled = interactionsEnabled,
                             onToggleBody = {
                                 expandedBodies = if (c.id in expandedBodies) {
                                     expandedBodies - c.id
@@ -1589,6 +1830,7 @@ private fun CommentPreviewStrip(
                                     comment = r,
                                     indented = true,
                                     bodyExpanded = r.id in expandedBodies,
+                                    interactionsEnabled = interactionsEnabled,
                                     onToggleBody = {
                                         expandedBodies = if (r.id in expandedBodies) {
                                             expandedBodies - r.id
@@ -1633,6 +1875,7 @@ private fun CommentPreviewRow(
     comment: CommentOut,
     indented: Boolean,
     bodyExpanded: Boolean,
+    interactionsEnabled: Boolean = true,
     onToggleBody: () -> Unit,
     onOpenReply: () -> Unit,
     onToggleLike: (CommentOut) -> Unit,
@@ -1660,7 +1903,7 @@ private fun CommentPreviewRow(
                 shape = cardShape,
             )
             .clip(cardShape)
-            .clickable(onClick = onOpenReply)
+            .clickable(enabled = interactionsEnabled, onClick = onOpenReply)
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
     Row(
@@ -1725,6 +1968,7 @@ private fun CommentPreviewRow(
         }
         IconButton(
             onClick = { onToggleLike(comment) },
+            enabled = interactionsEnabled,
             modifier = Modifier.size(32.dp),
         ) {
             Icon(
@@ -1757,6 +2001,7 @@ private fun CommentPreviewRow(
 @Composable
 private fun CommentEntryBar(
     onOpen: () -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(20.dp)
@@ -1775,7 +2020,7 @@ private fun CommentEntryBar(
                 shape = shape,
             )
             .clip(shape)
-            .clickable(onClick = onOpen)
+            .clickable(enabled = enabled, onClick = onOpen)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1788,7 +2033,11 @@ private fun CommentEntryBar(
         Text(
             text = "留言",
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = if (enabled) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+            },
         )
     }
 }
@@ -1799,6 +2048,7 @@ private fun CommentComposerBar(
     onDraftChange: (String) -> Unit,
     replyTo: CommentOut?,
     sending: Boolean,
+    enabled: Boolean = true,
     onSend: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1877,13 +2127,13 @@ private fun CommentComposerBar(
                 Text(
                     text = if (sending) "…" else "发送",
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (!sending && draft.isNotBlank()) {
+                    color = if (enabled && !sending && draft.isNotBlank()) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                     },
                     modifier = Modifier.clickable(
-                        enabled = !sending && draft.isNotBlank(),
+                        enabled = enabled && !sending && draft.isNotBlank(),
                         onClick = onSend,
                     ),
                 )
@@ -1908,6 +2158,7 @@ private fun CommentsPanelContent(
     onReplyToChange: (CommentOut?) -> Unit,
     sending: Boolean,
     actionError: String?,
+    interactionsEnabled: Boolean = true,
     onClose: () -> Unit,
     onToggleLike: (CommentOut) -> Unit,
     onSend: () -> Unit,
@@ -1997,6 +2248,7 @@ private fun CommentsPanelContent(
                                 CommentBlock(
                                     comment = c,
                                     indented = false,
+                                    interactionsEnabled = interactionsEnabled,
                                     onReply = { onReplyToChange(c) },
                                     onToggleLike = onToggleLike,
                                 )
@@ -2013,6 +2265,7 @@ private fun CommentsPanelContent(
                                     CommentBlock(
                                         comment = r,
                                         indented = true,
+                                        interactionsEnabled = interactionsEnabled,
                                         onReply = { onReplyToChange(r) },
                                         onToggleLike = onToggleLike,
                                     )
@@ -2067,6 +2320,7 @@ private fun CommentsPanelContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
+            enabled = interactionsEnabled,
             label = { Text("写评论") },
             minLines = 2,
             shape = MaterialTheme.shapes.medium,
@@ -2088,7 +2342,7 @@ private fun CommentsPanelContent(
         ) {
             Button(
                 onClick = onSend,
-                enabled = !sending && draft.isNotBlank(),
+                enabled = interactionsEnabled && !sending && draft.isNotBlank(),
             ) {
                 Text(if (sending) "发送中…" else "发送")
             }
@@ -2122,6 +2376,7 @@ private fun formatCommentTime(raw: String): String {
 private fun CommentBlock(
     comment: CommentOut,
     indented: Boolean,
+    interactionsEnabled: Boolean = true,
     onReply: () -> Unit,
     onToggleLike: (CommentOut) -> Unit,
 ) {
@@ -2193,12 +2448,20 @@ private fun CommentBlock(
                 Text(
                     text = "回复",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable(onClick = onReply),
+                    color = if (interactionsEnabled) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                    },
+                    modifier = Modifier.clickable(
+                        enabled = interactionsEnabled,
+                        onClick = onReply,
+                    ),
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 IconButton(
                     onClick = { onToggleLike(comment) },
+                    enabled = interactionsEnabled,
                     modifier = Modifier.size(32.dp),
                 ) {
                     Icon(

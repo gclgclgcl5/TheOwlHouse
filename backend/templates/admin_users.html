@@ -15,6 +15,8 @@
   <main>
     {% if message == "deleted" %}
     <p class="ok">用户已删除</p>
+    {% elif message == "password_updated" %}
+    <p class="ok">密码已更新</p>
     {% elif message == "missing" %}
     <p class="error">用户不存在或已删除</p>
     {% endif %}
@@ -36,14 +38,53 @@
         <div class="data-list__cell">{{ u.nickname }}</div>
         <div class="data-list__cell hint">{{ u.created_at }}</div>
         <div class="data-list__cell data-list__actions">
+          <a href="/admin/users/{{ u.id }}/password?page={{ page }}">修改密码</a>
           <form method="post" action="/admin/users/{{ u.id }}/delete"
                 onsubmit="return confirm('确认删除该用户？删除后无法登录。');">
+            <input type="hidden" name="page" value="{{ page }}" />
             <button type="submit" class="danger">删除</button>
           </form>
         </div>
       </div>
       {% endfor %}
     </div>
+    {% if total_pages > 1 %}
+    <nav class="pager" aria-label="分页">
+      {% if page > 1 %}
+      <a href="/admin/users?page={{ page - 1 }}">上一页</a>
+      {% else %}
+      <span class="pager__disabled">上一页</span>
+      {% endif %}
+
+      {% if page_numbers[0] > 1 %}
+      <a href="/admin/users?page=1">1</a>
+      {% if page_numbers[0] > 2 %}
+      <span class="pager__ellipsis">…</span>
+      {% endif %}
+      {% endif %}
+
+      {% for n in page_numbers %}
+        {% if n == page %}
+        <span class="pager__current" aria-current="page">{{ n }}</span>
+        {% else %}
+        <a href="/admin/users?page={{ n }}">{{ n }}</a>
+        {% endif %}
+      {% endfor %}
+
+      {% if page_numbers|last < total_pages %}
+      {% if page_numbers|last < total_pages - 1 %}
+      <span class="pager__ellipsis">…</span>
+      {% endif %}
+      <a href="/admin/users?page={{ total_pages }}">{{ total_pages }}</a>
+      {% endif %}
+
+      {% if page < total_pages %}
+      <a href="/admin/users?page={{ page + 1 }}">下一页</a>
+      {% else %}
+      <span class="pager__disabled">下一页</span>
+      {% endif %}
+    </nav>
+    {% endif %}
     {% else %}
     <p class="hint">暂无活跃用户。</p>
     {% endif %}

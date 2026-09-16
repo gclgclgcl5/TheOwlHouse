@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.like import Like
 from app.models.user import User
 from app.schemas.user_admin import AdminUserOut
+from app.services import auth as auth_service
 from app.services.storage import media_url
 
 
@@ -41,9 +42,27 @@ def list_active_users(
     return items, total
 
 
-def soft_delete_user(db: Session, user_id: int) -> User | None:
+def get_active_user(db: Session, user_id: int) -> User | None:
     user = db.get(User, user_id)
     if user is None or user.is_deleted:
+        return None
+    return user
+
+
+def set_password(db: Session, user_id: int, new_password: str) -> User | None:
+    user = get_active_user(db, user_id)
+    if user is None:
+        return None
+    user.password_hash = auth_service.hash_password(new_password)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def soft_delete_user(db: Session, user_id: int) -> User | None:
+    user = get_active_user(db, user_id)
+    if user is None:
         return None
     # 回滚该用户点赞
     db.execute(delete(Like).where(Like.user_id == user_id))

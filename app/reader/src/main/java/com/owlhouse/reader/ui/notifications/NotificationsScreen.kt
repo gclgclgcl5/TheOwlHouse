@@ -56,6 +56,8 @@ import kotlinx.coroutines.launch
 fun NotificationsScreen(
     onBack: () -> Unit,
     onOpenPage: (Int) -> Unit,
+    onOpenKing: (versionId: Int, slotId: Int) -> Unit,
+    onGoHome: () -> Unit,
     onSessionExpired: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -162,7 +164,23 @@ fun NotificationsScreen(
                                             if (!n.isRead) {
                                                 ApiClient.api.markNotificationRead(n.id)
                                             }
-                                            onOpenPage(n.pageId)
+                                            val kingSlotId = n.kingSlotId
+                                            if (kingSlotId != null && kingSlotId > 0) {
+                                                val preferred = app.kingProgress.lastVersionId
+                                                    .takeIf { it > 0 }
+                                                val resolved = ApiClient.api.resolveKingPage(
+                                                    slotId = kingSlotId,
+                                                    preferredVersionId = preferred,
+                                                )
+                                                onOpenKing(resolved.versionId, resolved.slotId)
+                                            } else {
+                                                val pageId = n.pageId
+                                                if (pageId != null && pageId > 0) {
+                                                    onOpenPage(pageId)
+                                                } else {
+                                                    onGoHome()
+                                                }
+                                            }
                                         } catch (e: Exception) {
                                             if (!app.tokenStore.isLoggedIn) {
                                                 onSessionExpired()
