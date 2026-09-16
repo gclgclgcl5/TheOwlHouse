@@ -59,6 +59,7 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -1069,6 +1070,9 @@ fun PageReaderScreen(
     var savingImage by remember { mutableStateOf(false) }
     var usingOfflineCache by remember { mutableStateOf(false) }
     var commentsFromCache by remember { mutableStateOf(false) }
+    var showVersionInfo by remember { mutableStateOf(false) }
+    var versionDescription by remember { mutableStateOf("") }
+    var versionInfoOpen by remember { mutableStateOf(false) }
     var imageTick by remember { mutableIntStateOf(0) }
     var readerScale by remember { mutableFloatStateOf(1f) }
     var readerOffset by remember { mutableStateOf(Offset.Zero) }
@@ -1175,6 +1179,8 @@ fun PageReaderScreen(
                 catalogTotal = boot.catalogTotal
                 nextOffset = boot.nextOffset
                 catalogHasMore = boot.catalogHasMore
+                showVersionInfo = boot.showVersionInfo
+                versionDescription = boot.versionDescription
                 noteOfflineCache(boot.fromCache)
                 if (boot.pages.isEmpty()) {
                     error = "还没有漫画"
@@ -1629,6 +1635,14 @@ fun PageReaderScreen(
                                 },
                             )
                         }
+                        if (showVersionInfo) {
+                            IconButton(onClick = {
+                                chromeTick += 1
+                                versionInfoOpen = true
+                            }) {
+                                Icon(Icons.Filled.Info, contentDescription = "版本介绍")
+                            }
+                        }
                         IconButton(
                             onClick = { requestSaveCurrentPage() },
                             enabled = currentPage != null && !savingImage,
@@ -1686,6 +1700,28 @@ fun PageReaderScreen(
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(bottom = if (dockedMode) 72.dp else 16.dp),
+        )
+    }
+
+    if (versionInfoOpen) {
+        AlertDialog(
+            onDismissRequest = { versionInfoOpen = false },
+            title = {
+                Text(currentPage?.subtitle?.takeIf { it.isNotBlank() } ?: "版本介绍")
+            },
+            text = {
+                Text(
+                    text = versionDescription.ifBlank { "暂无介绍" },
+                    modifier = Modifier
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { versionInfoOpen = false }) {
+                    Text("关闭")
+                }
+            },
         )
     }
 

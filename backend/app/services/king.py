@@ -9,6 +9,7 @@ from app.models.king import KingSlot, KingVersion, KingVersionImage
 from app.services.storage import delete_upload, media_url
 
 PENDING_APPEND_HINT = "请先补全该版本的待上传页，再追加新页。"
+DESCRIPTION_MAX_LEN = 5000
 
 
 @dataclass
@@ -132,6 +133,7 @@ def update_version(
     *,
     name: str | None = None,
     cover_path: str | None = None,
+    description: str | None = None,
 ) -> KingVersion:
     if name is not None:
         title = name.strip()
@@ -143,6 +145,14 @@ def update_version(
         version.cover_path = cover_path
         if old and old != cover_path:
             delete_upload(old)
+    if description is not None:
+        text = description.strip()
+        if len(text) > DESCRIPTION_MAX_LEN:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"版本介绍不能超过{DESCRIPTION_MAX_LEN}字",
+            )
+        version.description = text
     db.add(version)
     db.commit()
     db.refresh(version)
@@ -244,6 +254,7 @@ def version_to_out(db: Session, version: KingVersion) -> dict:
         "id": version.id,
         "name": version.name,
         "cover_url": media_url(version.cover_path),
+        "description": version.description or "",
         "is_default": version.is_default,
         "uploaded_count": uploaded_count(db, version.id),
         "created_at": version.created_at,

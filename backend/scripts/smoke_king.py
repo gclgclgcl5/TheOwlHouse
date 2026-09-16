@@ -39,6 +39,18 @@ def main() -> None:
 
     b = king_service.create_version(db, name="汉化组B", cover_path="king_covers/b.png")
     assert king_service.pending_count(db, b.id) == 2
+    king_service.update_version(db, b, description="作者甲\n竖排重制")
+    db.refresh(b)
+    assert b.description == "作者甲\n竖排重制"
+    assert king_service.version_to_out(db, b)["description"] == "作者甲\n竖排重制"
+    try:
+        king_service.update_version(db, b, description="x" * (king_service.DESCRIPTION_MAX_LEN + 1))
+        raise SystemExit("overlong description should fail")
+    except HTTPException as exc:
+        assert exc.status_code == 400
+    king_service.update_version(db, b, description="  ")
+    db.refresh(b)
+    assert b.description == ""
 
     try:
         king_service.append_global_page(db, b, title="第三页", image_path="comics/b3.png")

@@ -243,6 +243,7 @@ data class KingVersionOut(
     val id: Int,
     val name: String,
     @SerialName("cover_url") val coverUrl: String,
+    val description: String = "",
     @SerialName("is_default") val isDefault: Boolean = false,
     @SerialName("uploaded_count") val uploadedCount: Int = 0,
     @SerialName("created_at") val createdAt: String = "",
@@ -266,6 +267,7 @@ data class KingPageOut(
 data class KingPageListOut(
     @SerialName("version_id") val versionId: Int,
     @SerialName("version_name") val versionName: String,
+    val description: String = "",
     val items: List<KingPageOut>,
 )
 

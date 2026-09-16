@@ -166,6 +166,7 @@ async def king_update_meta(
     request: Request,
     version_id: int,
     name: str = Form(...),
+    description: str = Form(""),
     cover: UploadFile | None = File(None),
     db: Session = Depends(get_db),
 ):
@@ -178,7 +179,9 @@ async def king_update_meta(
         cover_path = None
         if cover is not None and cover.filename:
             cover_path = await save_king_cover(cover)
-        king_service.update_version(db, version, name=name, cover_path=cover_path)
+        king_service.update_version(
+            db, version, name=name, cover_path=cover_path, description=description
+        )
     except HTTPException as exc:
         return RedirectResponse(
             url=f"/admin/king/versions/{version_id}/settings?error={quote(str(exc.detail))}",

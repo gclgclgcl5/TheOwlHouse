@@ -161,6 +161,15 @@ def _ensure_schema() -> None:
                 conn.execute(text("ALTER TABLE comments ADD COLUMN reply_to_id INTEGER"))
         _rebuild_comments(conn)
         _rebuild_notifications(conn)
+        king_rows = conn.execute(text("PRAGMA table_info(king_versions)")).fetchall()
+        if king_rows:
+            king_cols = {row[1] for row in king_rows}
+            if "description" not in king_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE king_versions ADD COLUMN description TEXT NOT NULL DEFAULT ''"
+                    )
+                )
 
 
 def init_db() -> None:

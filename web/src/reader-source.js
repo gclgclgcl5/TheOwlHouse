@@ -158,6 +158,8 @@ export function createKingSource(preferredVersionId, deepSlotId = 0) {
         hasMore: false,
         nextOffset: pages.length,
         switchMessage,
+        showVersionInfo: true,
+        versionDescription: list.description || "",
       };
     },
     async loadMore(pages, nextOffset) {

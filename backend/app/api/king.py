@@ -43,6 +43,7 @@ def list_king_version_pages(
     return KingPageListOut(
         version_id=version.id,
         version_name=version.name,
+        description=version.description or "",
         items=[
             KingPageOut(
                 slot_id=r.slot_id,

@@ -9,6 +9,7 @@ class KingVersionOut(BaseModel):
     id: int
     name: str
     cover_url: str
+    description: str = ""
     is_default: bool
     uploaded_count: int
     created_at: datetime
@@ -29,6 +30,7 @@ class KingPageOut(BaseModel):
 class KingPageListOut(BaseModel):
     version_id: int
     version_name: str
+    description: str = ""
     items: list[KingPageOut]
 
 

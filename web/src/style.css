@@ -604,6 +604,52 @@ button, input, textarea { font: inherit; }
   opacity: 0.55;
   cursor: default;
 }
+.version-info-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: rgba(6, 14, 40, 0.62);
+}
+.version-info-overlay.hidden {
+  display: none;
+}
+.version-info-panel {
+  width: min(100%, 420px);
+  max-height: min(72vh, 560px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: var(--bg);
+  border: 1px solid rgba(90, 122, 184, 0.35);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+.version-info-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 16px;
+  border-bottom: 1px solid rgba(90, 122, 184, 0.22);
+}
+.version-info-head strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.version-info-body {
+  padding: 14px 16px 18px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--text);
+}
 .fab {
   position: absolute;
   right: 16px;

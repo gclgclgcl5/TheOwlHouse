@@ -31,6 +31,11 @@
           <label>更换封面（可选）
             <input type="file" name="cover" accept="image/*" />
           </label>
+          <label>版本介绍
+            <textarea name="description" rows="6" maxlength="5000"
+                      placeholder="介绍该版本的作者、特点等，读者可在阅读器随时查看">{{ version.description or "" }}</textarea>
+          </label>
+          <p class="hint">纯文本，读者端原样展示；可留空。</p>
           <button type="submit">保存版本信息</button>
         </form>
         {% if not version.is_default %}

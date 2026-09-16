@@ -23,6 +23,8 @@ data class ReaderBootstrap(
     val nextOffset: Int,
     val fromCache: Boolean = false,
     val switchMessage: String? = null,
+    val showVersionInfo: Boolean = false,
+    val versionDescription: String = "",
 )
 
 data class ReaderCatalogChunk(
@@ -229,6 +231,8 @@ class KingReaderSource(
             catalogHasMore = false,
             nextOffset = pages.size,
             switchMessage = switchMessage,
+            showVersionInfo = true,
+            versionDescription = list.description,
         )
     }
 

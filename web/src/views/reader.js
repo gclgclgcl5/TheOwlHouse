@@ -40,6 +40,7 @@ export function renderReader(root, source) {
   let nextOffset = 0;
   let hasMorePages = false;
   let loadingMorePages = false;
+  let versionDescription = "";
   const PREVIEW_BATCH = 8;
   let previewVisibleCount = PREVIEW_BATCH;
   /** @type {Map<number, number>} pageId -> height/width */
@@ -74,6 +75,7 @@ export function renderReader(root, source) {
           <button class="icon-btn" id="back" type="button">←</button>
           <div class="title" id="rtitle"></div>
           <button class="icon-btn${layoutMode === "docked" ? " on" : ""}" id="layout-toggle" type="button" title="${layoutMode === "docked" ? "沉浸式模式" : "评论区模式"}" aria-pressed="${layoutMode === "docked" ? "true" : "false"}">💬</button>
+          ${source.kind === "king" ? `<button class="icon-btn" id="version-info" type="button" title="版本介绍" aria-label="版本介绍">ℹ</button>` : ""}
           <button class="save-btn" id="save" type="button">保存</button>
         </div>
         <div class="king-switch-banner hidden" id="switch-banner"></div>
@@ -111,6 +113,15 @@ export function renderReader(root, source) {
         </div>
       </div>
     </div>
+    <div class="version-info-overlay hidden" id="version-info-overlay">
+      <div class="version-info-panel" role="dialog" aria-labelledby="version-info-title">
+        <div class="version-info-head">
+          <strong id="version-info-title">版本介绍</strong>
+          <button class="icon-btn" id="version-info-close" type="button" aria-label="关闭">×</button>
+        </div>
+        <div class="version-info-body" id="version-info-body"></div>
+      </div>
+    </div>
   `;
 
   const track = root.querySelector("#track");
@@ -133,6 +144,11 @@ export function renderReader(root, source) {
   const composerErr = root.querySelector("#composer-err");
   const composerSend = root.querySelector("#composer-send");
   const entryBar = root.querySelector("#entry-bar");
+  const versionInfoBtn = root.querySelector("#version-info");
+  const versionInfoOverlay = root.querySelector("#version-info-overlay");
+  const versionInfoTitle = root.querySelector("#version-info-title");
+  const versionInfoBody = root.querySelector("#version-info-body");
+  const versionInfoClose = root.querySelector("#version-info-close");
 
   const current = () => pages[index];
 
@@ -691,6 +707,7 @@ export function renderReader(root, source) {
       switchBanner.classList.remove("hidden");
       window.setTimeout(() => switchBanner.classList.add("hidden"), 3200);
     }
+    versionDescription = boot.versionDescription || "";
     return boot.initialId;
   }
 
@@ -833,6 +850,29 @@ export function renderReader(root, source) {
   saveBtn.onclick = (e) => {
     e.stopPropagation();
     saveCurrentPage();
+  };
+  function openVersionInfo() {
+    if (!versionInfoOverlay) return;
+    const p = current();
+    versionInfoTitle.textContent = p?.subtitle || "版本介绍";
+    versionInfoBody.textContent = versionDescription.trim() || "暂无介绍";
+    versionInfoOverlay.classList.remove("hidden");
+  }
+  function closeVersionInfo() {
+    versionInfoOverlay?.classList.add("hidden");
+  }
+  if (versionInfoBtn) {
+    versionInfoBtn.onclick = (e) => {
+      e.stopPropagation();
+      openVersionInfo();
+    };
+  }
+  versionInfoClose.onclick = (e) => {
+    e.stopPropagation();
+    closeVersionInfo();
+  };
+  versionInfoOverlay.onclick = (e) => {
+    if (e.target === versionInfoOverlay) closeVersionInfo();
   };
   root.querySelector("#fab").onclick = () => {
     if (layoutMode === "docked") {
