@@ -78,6 +78,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -936,7 +938,6 @@ private const val READER_MIN_SCALE = 1f
 private const val READER_MAX_SCALE = 4f
 private const val READER_ZOOM_EPS = 1.01f
 private const val PREVIEW_BATCH = 8
-private const val READER_PAGE_BATCH = 40
 private const val READER_PREFETCH_REMAINING = 5
 private val DOCKED_INPUT_RESERVE_HEIGHT = 48.dp
 
@@ -1015,17 +1016,34 @@ private fun ZoomableReaderImage(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-@Suppress("UNUSED_PARAMETER")
 fun PageReaderScreen(
     pageId: Int,
     onBack: () -> Unit,
-    onOpenPage: (Int) -> Unit,
+    onSessionExpired: () -> Unit,
+) {
+    val context = LocalContext.current
+    val app = context.applicationContext as OwlHouseApp
+    val source = remember(pageId) { DoujinReaderSource(app, pageId) }
+    PageReaderScreen(
+        source = source,
+        onBack = onBack,
+        onSessionExpired = onSessionExpired,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PageReaderScreen(
+    source: ReaderSource,
+    onBack: () -> Unit,
     onSessionExpired: () -> Unit,
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as OwlHouseApp
     val scope = rememberCoroutineScope()
-    var pages by remember { mutableStateOf<List<ComicPageOut>>(emptyList()) }
+    val snackbar = remember { SnackbarHostState() }
+    var pages by remember { mutableStateOf<List<ReaderPage>>(emptyList()) }
+    var initialPageId by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var chromeVisible by remember { mutableStateOf(false) }
@@ -1043,7 +1061,7 @@ fun PageReaderScreen(
     var composerOpen by remember { mutableStateOf(false) }
     var previewVisibleCount by remember { mutableIntStateOf(PREVIEW_BATCH) }
     var pagerReady by remember { mutableStateOf(false) }
-    var initialLocateDone by remember(pageId) { mutableStateOf(false) }
+    var initialLocateDone by remember { mutableStateOf(false) }
     var catalogTotal by remember { mutableIntStateOf(0) }
     var nextOffset by remember { mutableIntStateOf(0) }
     var catalogHasMore by remember { mutableStateOf(false) }
@@ -1064,9 +1082,9 @@ fun PageReaderScreen(
     val currentPage = if (pagerReady) {
         pages.getOrNull(pagerState.settledPage)
     } else {
-        pages.find { it.id == pageId }
+        pages.find { it.id == initialPageId }
     }
-    val currentPageId = currentPage?.id ?: pageId
+    val currentPageId = currentPage?.id ?: initialPageId
     val latestPageId = rememberUpdatedState(currentPageId)
     val commentsLoadJob = remember { object { var job: Job? = null } }
     val gesturesBlocked = !dockedMode && commentsOpen
@@ -1074,6 +1092,10 @@ fun PageReaderScreen(
     val previewMaxHeight = (configuration.screenHeightDp * 0.2f).dp
 
     fun noteOfflineCache(fromCache: Boolean) {
+        if (!source.supportsOffline) {
+            usingOfflineCache = false
+            return
+        }
         if (fromCache) {
             usingOfflineCache = true
             if (!app.offlineHintShownThisProcess) {
@@ -1135,7 +1157,7 @@ fun PageReaderScreen(
         }
     }
 
-    fun loadCatalogUntilContains(targetPageId: Int) {
+    fun bootstrapCatalog() {
         scope.launch {
             loading = true
             error = null
@@ -1147,46 +1169,17 @@ fun PageReaderScreen(
             catalogHasMore = false
             usingOfflineCache = false
             try {
-                val loaded = mutableListOf<ComicPageOut>()
-                var loadedCount = 0
-                var total = 0
-                var fromCache = false
-                while (true) {
-                    val cached = app.offline.listPages(
-                        limit = READER_PAGE_BATCH,
-                        offset = loadedCount,
-                        order = "page_no",
-                    )
-                    if (cached.fromCache) fromCache = true
-                    val res = cached.data
-                    if (res.items.isEmpty()) break
-                    loaded += res.items
-                    total = res.total
-                    loadedCount += res.items.size
-                    if (loaded.any { it.id == targetPageId }) break
-                    if (loadedCount >= total) break
-                }
-                val loadedPages = if (loaded.isEmpty()) {
-                    emptyList()
-                } else {
-                    loaded.distinctBy { it.id }.sortedBy { it.pageNo }
-                }
-                if (loadedPages.isEmpty()) {
+                val boot = source.bootstrap()
+                pages = boot.pages
+                initialPageId = boot.initialPageId
+                catalogTotal = boot.catalogTotal
+                nextOffset = boot.nextOffset
+                catalogHasMore = boot.catalogHasMore
+                noteOfflineCache(boot.fromCache)
+                if (boot.pages.isEmpty()) {
                     error = "还没有漫画"
-                    pages = emptyList()
-                } else {
-                    pages = if (loadedPages.none { it.id == targetPageId }) {
-                        val one = app.offline.getPage(targetPageId)
-                        if (one.fromCache) fromCache = true
-                        (loadedPages + one.data).distinctBy { it.id }.sortedBy { it.pageNo }
-                    } else {
-                        loadedPages
-                    }
-                    catalogTotal = maxOf(total, pages.size)
-                    nextOffset = loadedCount
-                    catalogHasMore = loadedCount < catalogTotal
-                    noteOfflineCache(fromCache)
                 }
+                boot.switchMessage?.let { snackbar.showSnackbar(it) }
             } catch (e: Exception) {
                 if (!app.tokenStore.isLoggedIn) {
                     onSessionExpired()
@@ -1204,21 +1197,12 @@ fun PageReaderScreen(
         scope.launch {
             catalogLoadingMore = true
             try {
-                val cached = app.offline.listPages(
-                    limit = READER_PAGE_BATCH,
-                    offset = nextOffset,
-                    order = "page_no",
-                )
-                if (cached.fromCache) noteOfflineCache(true)
-                val res = cached.data
-                if (res.items.isEmpty()) {
-                    catalogHasMore = false
-                    return@launch
-                }
-                pages = (pages + res.items).distinctBy { it.id }.sortedBy { it.pageNo }
-                catalogTotal = maxOf(catalogTotal, res.total)
-                nextOffset += res.items.size
-                catalogHasMore = nextOffset < catalogTotal
+                val chunk = source.loadMoreCatalog(pages, nextOffset)
+                if (chunk.fromCache) noteOfflineCache(true)
+                pages = chunk.pages
+                catalogTotal = chunk.catalogTotal
+                nextOffset = chunk.nextOffset
+                catalogHasMore = chunk.catalogHasMore
             } catch (e: Exception) {
                 if (!app.tokenStore.isLoggedIn) {
                     onSessionExpired()
@@ -1229,9 +1213,14 @@ fun PageReaderScreen(
         }
     }
 
+    fun commentAnchorId(c: CommentOut?): Int? {
+        if (c == null) return null
+        return c.pageId ?: c.kingSlotId
+    }
+
     fun refreshComments(forPageId: Int = currentPageId) {
         commentsLoadJob.job?.cancel()
-        if (comments.firstOrNull()?.pageId != forPageId) {
+        if (commentAnchorId(comments.firstOrNull()) != forPageId) {
             comments = emptyList()
             commentCount = 0
         }
@@ -1240,10 +1229,10 @@ fun PageReaderScreen(
         commentsLoadJob.job = scope.launch {
             try {
                 val sort = if (dockedMode || sortTab == 1) "hot" else "latest"
-                val cached = app.offline.listComments(forPageId, sort = sort)
+                val cached = source.listComments(forPageId, sort = sort)
                 if (forPageId != latestPageId.value) return@launch
-                comments = cached.data
-                commentCount = cached.data.size
+                comments = cached.items
+                commentCount = cached.items.size
                 commentsFromCache = cached.fromCache
                 if (cached.fromCache) noteOfflineCache(true)
                 if (dockedMode) {
@@ -1271,9 +1260,9 @@ fun PageReaderScreen(
         commentsLoadJob.job?.cancel()
         commentsLoadJob.job = scope.launch {
             try {
-                val cached = app.offline.listComments(forPageId, sort = "latest")
+                val cached = source.listComments(forPageId, sort = "latest")
                 if (forPageId != latestPageId.value) return@launch
-                commentCount = cached.data.size
+                commentCount = cached.items.size
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1375,7 +1364,7 @@ fun PageReaderScreen(
             sending = true
             actionError = null
             try {
-                ApiClient.api.createComment(
+                source.createComment(
                     currentPageId,
                     CommentCreate(content = text, parentId = replyTo?.id),
                 )
@@ -1395,19 +1384,19 @@ fun PageReaderScreen(
         }
     }
 
-    LaunchedEffect(pageId) {
+    LaunchedEffect(source) {
         chromeVisible = false
         commentsOpen = false
         composerOpen = false
         draft = ""
         replyTo = null
-        loadCatalogUntilContains(pageId)
+        bootstrapCatalog()
     }
 
-    LaunchedEffect(pages, pageId, initialLocateDone) {
+    LaunchedEffect(pages, initialPageId, initialLocateDone) {
         if (initialLocateDone) return@LaunchedEffect
         if (pages.isEmpty()) return@LaunchedEffect
-        val idx = pages.indexOfFirst { it.id == pageId }
+        val idx = pages.indexOfFirst { it.id == initialPageId }
         if (idx < 0) return@LaunchedEffect
         pagerState.scrollToPage(idx)
         pagerReady = true
@@ -1419,7 +1408,7 @@ fun PageReaderScreen(
         val settled = pages.getOrNull(pagerState.settledPage) ?: return@LaunchedEffect
         readerScale = 1f
         readerOffset = Offset.Zero
-        app.readingProgress.markRead(settled)
+        source.markRead(settled)
         chromeVisible = false
         composerOpen = false
         if (!dockedMode && commentsOpen) {
@@ -1439,7 +1428,7 @@ fun PageReaderScreen(
     LaunchedEffect(currentPageId, pagerReady, pages) {
         if (!pagerReady) return@LaunchedEffect
         val page = pages.firstOrNull { it.id == currentPageId } ?: return@LaunchedEffect
-        app.offline.ensurePageImage(page)
+        source.ensureImage(page)
         imageTick += 1
     }
 
@@ -1504,9 +1493,8 @@ fun PageReaderScreen(
                             val isSettledPage = index == pagerState.settledPage
                             ZoomableReaderImage(
                                 imageModel = run {
-                                    // imageTick：确保页图下载完成后刷新显示本地文件
                                     imageTick
-                                    app.offline.imageModel(item)
+                                    source.imageModel(item)
                                 },
                                 contentDescription = item.title,
                                 useStrip = useStrip,
@@ -1591,7 +1579,25 @@ fun PageReaderScreen(
                 tonalElevation = 0.dp,
             ) {
                 TopAppBar(
-                    title = { Text(currentPage?.title ?: "阅读") },
+                    title = {
+                        Column {
+                            Text(
+                                currentPage?.title ?: "阅读",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            val subtitle = currentPage?.subtitle
+                            if (!subtitle.isNullOrBlank()) {
+                                Text(
+                                    subtitle,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
                         titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -1673,6 +1679,14 @@ fun PageReaderScreen(
                 }
             }
         }
+
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = if (dockedMode) 72.dp else 16.dp),
+        )
     }
 
     if (!dockedMode && commentsOpen) {
@@ -1717,8 +1731,12 @@ private fun CommentPreviewStrip(
     onOpenReply: (CommentOut) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var expandedTops by remember(comments.firstOrNull()?.pageId) { mutableStateOf<Set<Int>>(emptySet()) }
-    var expandedBodies by remember(comments.firstOrNull()?.pageId) { mutableStateOf<Set<Int>>(emptySet()) }
+    var expandedTops by remember(comments.firstOrNull()?.pageId ?: comments.firstOrNull()?.kingSlotId) {
+        mutableStateOf<Set<Int>>(emptySet())
+    }
+    var expandedBodies by remember(comments.firstOrNull()?.pageId ?: comments.firstOrNull()?.kingSlotId) {
+        mutableStateOf<Set<Int>>(emptySet())
+    }
     val scrollState = rememberScrollState()
     val visibleComments = comments.take(visibleCount)
 

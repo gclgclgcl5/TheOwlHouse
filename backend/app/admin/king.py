@@ -98,6 +98,29 @@ def king_version_pages(
             pending=pending,
             uploaded=uploaded,
             slot_total=king_service.slot_count(db),
+            message=request.query_params.get("message"),
+            error=request.query_params.get("error"),
+        ),
+    )
+
+
+@router.get("/versions/{version_id}/settings", response_class=HTMLResponse, response_model=None)
+def king_version_settings(
+    request: Request,
+    version_id: int,
+    db: Session = Depends(get_db),
+):
+    if not is_admin(request):
+        return _login_redirect()
+    version = king_service.get_version(db, version_id)
+    if version is None:
+        return RedirectResponse(url="/admin/king", status_code=HTTP_303_SEE_OTHER)
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_king_version_settings.html",
+        context=_ctx(
+            title="版本设置",
+            version=version,
             cover_url=media_url(version.cover_path),
             message=request.query_params.get("message"),
             error=request.query_params.get("error"),
@@ -110,18 +133,26 @@ async def king_create_version(
     request: Request,
     name: str = Form(...),
     cover: UploadFile = File(...),
+    from_version_id: int = Form(0),
     db: Session = Depends(get_db),
 ):
     if not is_admin(request):
         return _login_redirect()
+
+    def settings_fallback() -> str:
+        if from_version_id > 0 and king_service.get_version(db, from_version_id) is not None:
+            return f"/admin/king/versions/{from_version_id}/settings"
+        default = king_service.default_version(db)
+        if default is not None:
+            return f"/admin/king/versions/{default.id}/settings"
+        return "/admin/king"
+
     try:
         cover_path = await save_king_cover(cover)
         version = king_service.create_version(db, name=name, cover_path=cover_path)
     except HTTPException as exc:
-        default = king_service.default_version(db)
-        target = default.id if default is not None else ""
         return RedirectResponse(
-            url=f"/admin/king/versions/{target}?error={quote(str(exc.detail))}" if target else "/admin/king",
+            url=f"{settings_fallback()}?error={quote(str(exc.detail))}",
             status_code=HTTP_303_SEE_OTHER,
         )
     return RedirectResponse(
@@ -150,11 +181,11 @@ async def king_update_meta(
         king_service.update_version(db, version, name=name, cover_path=cover_path)
     except HTTPException as exc:
         return RedirectResponse(
-            url=f"/admin/king/versions/{version_id}?error={quote(str(exc.detail))}",
+            url=f"/admin/king/versions/{version_id}/settings?error={quote(str(exc.detail))}",
             status_code=HTTP_303_SEE_OTHER,
         )
     return RedirectResponse(
-        url=f"/admin/king/versions/{version_id}?message=updated",
+        url=f"/admin/king/versions/{version_id}/settings?message=updated",
         status_code=HTTP_303_SEE_OTHER,
     )
 
@@ -174,7 +205,7 @@ def king_delete_version(
         king_service.delete_version(db, version)
     except HTTPException as exc:
         return RedirectResponse(
-            url=f"/admin/king/versions/{version_id}?error={quote(str(exc.detail))}",
+            url=f"/admin/king/versions/{version_id}/settings?error={quote(str(exc.detail))}",
             status_code=HTTP_303_SEE_OTHER,
         )
     return RedirectResponse(url="/admin/king?message=deleted", status_code=HTTP_303_SEE_OTHER)

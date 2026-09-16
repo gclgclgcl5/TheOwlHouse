@@ -133,25 +133,6 @@ button, input, textarea { font: inherit; }
   border-radius: 2px;
   background: var(--accent);
 }
-.version-card {
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 12px;
-  align-items: center;
-}
-.version-card img {
-  width: 72px;
-  height: 96px;
-  object-fit: cover;
-  border-radius: 10px;
-  background: var(--surface-2);
-}
-.version-card.current {
-  background: rgba(30, 58, 122, 0.9);
-}
-.version-card.current .title {
-  color: var(--accent);
-}
 .king-switch-banner {
   position: absolute;
   left: 12px;

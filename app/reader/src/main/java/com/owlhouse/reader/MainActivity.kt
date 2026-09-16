@@ -27,7 +27,7 @@ import com.owlhouse.reader.data.SessionEvents
 import com.owlhouse.reader.ui.auth.LoginScreen
 import com.owlhouse.reader.ui.auth.RegisterScreen
 import com.owlhouse.reader.ui.notifications.NotificationsScreen
-import com.owlhouse.reader.ui.pages.KingReaderScreen
+import com.owlhouse.reader.ui.pages.KingReaderSource
 import com.owlhouse.reader.ui.pages.PageListScreen
 import com.owlhouse.reader.ui.pages.PageReaderScreen
 import com.owlhouse.reader.ui.theme.OwlHouseTheme
@@ -148,11 +148,6 @@ private fun OwlHouseNav() {
             PageReaderScreen(
                 pageId = id,
                 onBack = { navController.popBackStack() },
-                onOpenPage = { nextId ->
-                    navController.navigate("page/$nextId") {
-                        popUpTo("page/$id") { inclusive = true }
-                    }
-                },
                 onSessionExpired = { goLogin() },
             )
         }
@@ -168,9 +163,12 @@ private fun OwlHouseNav() {
         ) { entry ->
             val versionId = entry.arguments?.getInt("versionId") ?: return@composable
             val slotId = entry.arguments?.getInt("slotId") ?: 0
-            KingReaderScreen(
-                versionId = versionId,
-                slotId = slotId,
+            val appCtx = LocalContext.current.applicationContext as OwlHouseApp
+            val source = remember(versionId, slotId) {
+                KingReaderSource(appCtx, versionId, slotId)
+            }
+            PageReaderScreen(
+                source = source,
                 onBack = { navController.popBackStack() },
                 onSessionExpired = { goLogin() },
             )

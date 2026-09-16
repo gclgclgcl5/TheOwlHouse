@@ -1,7 +1,8 @@
 import { api, mediaUrl } from "../api.js";
-import { isLoggedIn, markRead, effectiveStripMode, loadCommentsLayoutMode, saveCommentsLayoutMode } from "../store.js";
+import { isLoggedIn, effectiveStripMode, loadCommentsLayoutMode, saveCommentsLayoutMode } from "../store.js";
 import { go } from "../router.js";
 import { escapeHtml, formatMmDd, avatarHtml } from "../util.js";
+import { createDoujinSource } from "../reader-source.js";
 
 function sortReplies(replies) {
   return [...(replies || [])].sort((a, b) => {
@@ -10,7 +11,13 @@ function sortReplies(replies) {
   });
 }
 
-export function renderReader(root, pageId) {
+/** @param {HTMLElement} root @param {number} pageId */
+export function renderReaderByPageId(root, pageId) {
+  return renderReader(root, createDoujinSource(pageId));
+}
+
+/** @param {HTMLElement} root @param {*} source */
+export function renderReader(root, source) {
   if (!isLoggedIn()) {
     go("/login");
     return;
@@ -28,7 +35,6 @@ export function renderReader(root, pageId) {
   let expanded = new Set();
   let expandedBodies = new Set();
   let replyTo = null;
-  const PAGE_BATCH = 40;
   const PAGE_PREFETCH_REMAINING = 5;
   let totalPages = 0;
   let nextOffset = 0;
@@ -70,6 +76,7 @@ export function renderReader(root, pageId) {
           <button class="icon-btn${layoutMode === "docked" ? " on" : ""}" id="layout-toggle" type="button" title="${layoutMode === "docked" ? "沉浸式模式" : "评论区模式"}" aria-pressed="${layoutMode === "docked" ? "true" : "false"}">💬</button>
           <button class="save-btn" id="save" type="button">保存</button>
         </div>
+        <div class="king-switch-banner hidden" id="switch-banner"></div>
         <button class="fab hidden" id="fab" type="button">💬<span class="fab-badge hidden" id="cc"></span></button>
       </div>
       <div class="comment-preview hidden" id="comment-preview"></div>
@@ -109,6 +116,7 @@ export function renderReader(root, pageId) {
   const track = root.querySelector("#track");
   const reader = root.querySelector("#reader");
   const chrome = root.querySelector("#chrome");
+  const switchBanner = root.querySelector("#switch-banner");
   const layoutToggle = root.querySelector("#layout-toggle");
   const saveBtn = root.querySelector("#save");
   const fab = root.querySelector("#fab");
@@ -387,7 +395,11 @@ export function renderReader(root, pageId) {
     const hideFab = layoutMode === "docked" || !on || gesturesBlocked() || !current();
     fab.classList.toggle("hidden", hideFab);
     if (on) {
-      root.querySelector("#rtitle").textContent = current()?.title || "阅读";
+      const p = current();
+      const title = p?.title || "阅读";
+      root.querySelector("#rtitle").textContent = p?.subtitle
+        ? `${title} · ${p.subtitle}`
+        : title;
       clearTimeout(chromeTimer);
       chromeTimer = setTimeout(() => {
         if (!gesturesBlocked()) setChrome(false);
@@ -649,34 +661,19 @@ export function renderReader(root, pageId) {
     };
   }
 
-  async function loadCatalogUntilContains(targetPageId) {
-    pages = [];
-    totalPages = 0;
-    nextOffset = 0;
-    hasMorePages = false;
+  async function loadCatalogUntilContains(_targetPageId) {
+    const boot = await source.bootstrap();
+    pages = boot.pages || [];
+    totalPages = Number(boot.total || pages.length);
+    nextOffset = Number(boot.nextOffset || pages.length);
+    hasMorePages = Boolean(boot.hasMore);
     loadingMorePages = false;
-
-    while (true) {
-      const res = await api.listPages({ limit: PAGE_BATCH, offset: nextOffset, order: "page_no" });
-      const items = res.items || [];
-      if (!items.length) break;
-      pages = [...pages, ...items]
-        .filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
-        .sort((a, b) => a.page_no - b.page_no);
-      totalPages = Number(res.total || 0);
-      nextOffset += items.length;
-      hasMorePages = nextOffset < totalPages;
-      if (pages.some((p) => p.id === targetPageId)) break;
-      if (!hasMorePages) break;
+    if (boot.switchMessage) {
+      switchBanner.textContent = boot.switchMessage;
+      switchBanner.classList.remove("hidden");
+      window.setTimeout(() => switchBanner.classList.add("hidden"), 3200);
     }
-
-    if (!pages.length) return;
-    if (!pages.some((p) => p.id === targetPageId)) {
-      const one = await api.getPage(targetPageId);
-      pages = [...pages, one]
-        .filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
-        .sort((a, b) => a.page_no - b.page_no);
-    }
+    return boot.initialId;
   }
 
   async function loadMorePagesIfNeeded() {
@@ -685,18 +682,11 @@ export function renderReader(root, pageId) {
     if (remain > PAGE_PREFETCH_REMAINING) return;
     loadingMorePages = true;
     try {
-      const res = await api.listPages({ limit: PAGE_BATCH, offset: nextOffset, order: "page_no" });
-      const items = res.items || [];
-      totalPages = Number(res.total || totalPages);
-      if (!items.length) {
-        hasMorePages = false;
-        return;
-      }
-      pages = [...pages, ...items]
-        .filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
-        .sort((a, b) => a.page_no - b.page_no);
-      nextOffset += items.length;
-      hasMorePages = nextOffset < totalPages;
+      const chunk = await source.loadMore(pages, nextOffset);
+      pages = chunk.pages || pages;
+      totalPages = Number(chunk.total || totalPages);
+      nextOffset = Number(chunk.nextOffset || nextOffset);
+      hasMorePages = Boolean(chunk.hasMore);
       syncWindow();
       applyTransform(false);
     } finally {
@@ -709,7 +699,7 @@ export function renderReader(root, pageId) {
     if (!p) return;
     const sort = layoutMode === "docked" || sortTab === 1 ? "hot" : "latest";
     try {
-      const res = await api.listComments(p.id, sort);
+      const res = await source.listComments(p.id, sort);
       comments = res.items || [];
       previewVisibleCount = PREVIEW_BATCH;
       setCount(comments.length);
@@ -727,7 +717,7 @@ export function renderReader(root, pageId) {
   async function onSettled() {
     const p = current();
     if (!p) return;
-    markRead(p);
+    source.markRead(p);
     setChrome(false);
     closeComposer();
     void loadMorePagesIfNeeded();
@@ -736,7 +726,7 @@ export function renderReader(root, pageId) {
       return;
     }
     try {
-      const res = await api.listComments(p.id, "latest");
+      const res = await source.listComments(p.id, "latest");
       setCount((res.items || []).length);
     } catch (e) {
       if (e.status === 401 || !isLoggedIn()) go("/login");
@@ -867,7 +857,7 @@ export function renderReader(root, pageId) {
     btn.disabled = true;
     cerr.classList.add("hidden");
     try {
-      await api.createComment(p.id, text, replyTo?.id ?? null);
+      await source.createComment(p.id, text, replyTo?.id ?? null);
       draft.value = "";
       replyTo = null;
       updateReplyBar();
@@ -891,7 +881,7 @@ export function renderReader(root, pageId) {
     composerSend.disabled = true;
     composerErr.classList.add("hidden");
     try {
-      await api.createComment(p.id, text, replyTo?.id ?? null);
+      await source.createComment(p.id, text, replyTo?.id ?? null);
       closeComposer();
       await refreshComments();
     } catch (err) {
@@ -1195,12 +1185,15 @@ export function renderReader(root, pageId) {
 
   (async () => {
     try {
-      await loadCatalogUntilContains(pageId);
+      const initialId = await loadCatalogUntilContains();
       if (!pages.length) {
-        root.innerHTML = `<div class="center">还没有漫画</div>`;
+        root.innerHTML = `<div class="center">${
+          source.kind === "king" ? "该版本还没有已上传的页" : "还没有漫画"
+        }</div>`;
         return;
       }
-      index = Math.max(0, pages.findIndex((p) => p.id === pageId));
+      const idx = pages.findIndex((p) => p.id === initialId);
+      index = Math.max(0, idx);
       paintPages();
       onSettled();
     } catch (e) {

@@ -4,7 +4,7 @@ import { renderLogin } from "./views/login.js";
 import { renderRegister } from "./views/register.js";
 import { renderHome } from "./views/home.js";
 import { renderReader } from "./views/reader.js";
-import { renderKingReader } from "./views/king-reader.js";
+import { createDoujinSource, createKingSource } from "./reader-source.js";
 import { renderNotifications } from "./views/notifications.js";
 
 const app = document.getElementById("app");
@@ -27,10 +27,10 @@ function render(route) {
       renderHome(app);
       break;
     case "page":
-      renderReader(app, route.pageId);
+      renderReader(app, createDoujinSource(route.pageId));
       break;
     case "king":
-      renderKingReader(app, route.versionId, route.slotId || 0);
+      renderReader(app, createKingSource(route.versionId, route.slotId || 0));
       break;
     case "notifications":
       renderNotifications(app);

@@ -195,7 +195,8 @@ button.danger {
   --cols: 88px minmax(96px, 1fr) minmax(7.5rem, 0.7fr) minmax(10rem, 1.1fr) minmax(11rem, auto);
 }
 .data-list--king {
-  --cols: 88px minmax(96px, 1fr) minmax(4rem, 0.5fr) minmax(14rem, auto);
+  /* 预览 | 标题 | 页序 | 状态 | 操作 */
+  --cols: 88px minmax(96px, 1fr) minmax(4rem, 0.45fr) minmax(4.5rem, 0.55fr) minmax(11rem, auto);
 }
 .data-list--users {
   --cols: 88px 72px minmax(96px, 1fr) minmax(10rem, 1.1fr) minmax(6rem, auto);
@@ -370,11 +371,19 @@ button.danger {
   word-break: break-word;
 }
 
+.version-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin: 0 0 1rem;
+}
 .version-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
-  margin: 0 0 1.25rem;
+  margin: 0;
 }
 .version-tabs a {
   display: inline-flex;
@@ -394,19 +403,29 @@ button.danger {
   color: var(--accent-ink);
   text-decoration: none;
 }
-.king-meta,
-.king-new-version {
+.version-settings-link {
+  color: var(--accent);
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.version-settings-link:hover {
+  text-decoration: underline;
+}
+.king-settings-block {
+  margin-bottom: 1.5rem;
+}
+.king-settings-block h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+.king-meta {
   display: grid;
   gap: 0.85rem;
-  margin-bottom: 1.25rem;
   padding: 1rem;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
-}
-.king-new-version h2 {
-  margin: 0;
-  font-size: 1.05rem;
 }
 .form--inline {
   margin-top: 0;

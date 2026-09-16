@@ -188,7 +188,7 @@ export function renderHome(root) {
     }
     const parts = kingVersions.map((v) => {
       const current = prog.lastVersionId > 0 && v.id === prog.lastVersionId;
-      const cls = `card version-card${current ? " current" : ""}`;
+      const cls = `card page-row${current ? " current" : ""}`;
       const src = mediaUrl(v.cover_url);
       const subParts = [`已上传 ${v.uploaded_count} 页`];
       if (current) subParts.push("上次阅读");

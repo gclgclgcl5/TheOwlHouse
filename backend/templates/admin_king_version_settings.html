@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>版本设置</h1>
+    <p class="hint">{{ version.name }}{% if version.is_default %}（默认）{% endif %}</p>
+    <p><a class="back-link" href="/admin/king/versions/{{ version.id }}">← 返回页列表</a></p>
+  </header>
+  <main>
+    {% if message %}
+    <p class="ok">操作成功</p>
+    {% endif %}
+    {% if error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
+
+    <section class="king-settings-block">
+      <h2>当前版本</h2>
+      <div class="king-meta">
+        <img class="thumb" src="{{ cover_url }}" alt="" />
+        <form method="post" action="/admin/king/versions/{{ version.id }}/meta" enctype="multipart/form-data" class="form form--inline">
+          <label>版本名称
+            <input type="text" name="name" required maxlength="200" value="{{ version.name }}" />
+          </label>
+          <label>更换封面（可选）
+            <input type="file" name="cover" accept="image/*" />
+          </label>
+          <button type="submit">保存版本信息</button>
+        </form>
+        {% if not version.is_default %}
+        <form method="post" action="/admin/king/versions/{{ version.id }}/delete"
+              onsubmit="return confirm('删除该版本？全局页与评论会保留。');">
+          <button type="submit" class="danger">删除此版本</button>
+        </form>
+        {% else %}
+        <p class="hint">默认版本不可删除。</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="king-settings-block">
+      <h2>添加版本</h2>
+      <form method="post" action="/admin/king/versions" enctype="multipart/form-data" class="form form--inline">
+        <input type="hidden" name="from_version_id" value="{{ version.id }}" />
+        <label>名称
+          <input type="text" name="name" required maxlength="200" />
+        </label>
+        <label>封面
+          <input type="file" name="cover" accept="image/*" required />
+        </label>
+        <button type="submit">创建版本</button>
+      </form>
+      <p class="hint">新版本创建后需按全局页序补齐图片；标题与评论跨版本共享。</p>
+    </section>
+  </main>
+</body>
+</html>
