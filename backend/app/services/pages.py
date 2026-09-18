@@ -96,7 +96,73 @@ def update_page(
     return page
 
 
+def shift_page_nos_from(db: Session, from_no: int) -> None:
+    """Bump page_no for all pages at/after from_no (high → low to avoid collisions)."""
+    rows = list(
+        db.scalars(
+            select(ComicPage)
+            .where(ComicPage.page_no >= from_no)
+            .order_by(ComicPage.page_no.desc(), ComicPage.id.desc())
+        ).all()
+    )
+    for row in rows:
+        row.page_no = row.page_no + 1
+        db.add(row)
+    if rows:
+        db.flush()
+
+
+def insert_page_before(
+    db: Session,
+    *,
+    before_page: ComicPage,
+    title: str,
+    image_path: str,
+) -> ComicPage:
+    """Insert a page immediately before before_page. Shifts that page and following."""
+    text = title.strip()
+    n = int(before_page.page_no)
+    shift_page_nos_from(db, n)
+    page = ComicPage(title=text, page_no=n, image_path=image_path)
+    db.add(page)
+    db.commit()
+    db.refresh(page)
+    return page
+
+
+def renumber_pages_contiguous(db: Session, *, commit: bool = True) -> None:
+    rows = list(
+        db.scalars(
+            select(ComicPage).order_by(ComicPage.page_no.asc(), ComicPage.id.asc())
+        ).all()
+    )
+    for i, row in enumerate(rows, start=1):
+        if row.page_no != i:
+            row.page_no = i
+            db.add(row)
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+
+
 def delete_page(db: Session, page: ComicPage) -> None:
     delete_upload(page.image_path)
     db.delete(page)
-    db.commit()
+    db.flush()
+    renumber_pages_contiguous(db, commit=True)
+
+
+def neighbor_titles_for_insert_before(
+    db: Session, *, before_page: ComicPage
+) -> tuple[str | None, str]:
+    """Return (prev_title, before_page title that will shift)."""
+    nxt_title = before_page.title
+    prev = db.scalar(
+        select(ComicPage)
+        .where(ComicPage.page_no < before_page.page_no)
+        .order_by(ComicPage.page_no.desc(), ComicPage.id.desc())
+        .limit(1)
+    )
+    prev_title = prev.title if prev is not None else None
+    return prev_title, nxt_title

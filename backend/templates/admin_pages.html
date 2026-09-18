@@ -16,7 +16,10 @@
     {% if message %}
     <p class="ok">操作成功：{{ message }}</p>
     {% endif %}
-    <p><a class="button" href="/admin/pages/new">新增同人页</a></p>
+    <p class="hint">漏传：在漏页后的那一页点「在此之前插入」。多传：删除后自动重排为连续页序。</p>
+    <p>
+      <a class="button" href="/admin/pages/new">新增同人页</a>
+    </p>
     {% if pages %}
     <div class="data-list data-list--pages">
       <div class="data-list__head">
@@ -44,7 +47,9 @@
         <div class="data-list__cell data-list__actions">
           <a href="/admin/pages/{{ p.id }}/comments">评论（{{ p.comment_count }}）</a>
           <a href="/admin/pages/{{ p.id }}/edit">编辑</a>
-          <form method="post" action="/admin/pages/{{ p.id }}/delete" onsubmit="return confirm('确认删除？');">
+          <a href="/admin/pages/insert?before={{ p.id }}">在此之前插入</a>
+          <form method="post" action="/admin/pages/{{ p.id }}/delete"
+                onsubmit="return confirm('确认删除？删除后后面页序会自动重排为连续 1…N，该页评论也会删除。');">
             <button type="submit" class="danger">删除</button>
           </form>
         </div>

@@ -40,6 +40,24 @@ async def admin_create_page(
     return pages_service.page_to_out(page)
 
 
+@router.post("/insert", response_model=ComicPageOut, status_code=status.HTTP_201_CREATED)
+async def admin_insert_page(
+    title: str = Form(..., min_length=1, max_length=200),
+    image: UploadFile = File(...),
+    before_id: int = Form(...),
+    _: str = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> ComicPageOut:
+    before_page = pages_service.get_page(db, before_id)
+    if before_page is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="参照页不存在")
+    image_path = await save_comic_image(image)
+    page = pages_service.insert_page_before(
+        db, before_page=before_page, title=title, image_path=image_path
+    )
+    return pages_service.page_to_out(page)
+
+
 @router.put("/{page_id}", response_model=ComicPageOut)
 async def admin_update_page(
     page_id: int,

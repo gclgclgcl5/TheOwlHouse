@@ -193,6 +193,98 @@ async def pages_create(
     )
 
 
+def _insert_form_context(
+    *,
+    before_page,
+    title_value: str = "",
+    error=None,
+    db: Session,
+):
+    insert_no = int(before_page.page_no)
+    prev_title, next_title = pages_service.neighbor_titles_for_insert_before(
+        db, before_page=before_page
+    )
+    return {
+        "app_name": settings.app_name,
+        "title": "插入同人页",
+        "page": {"title": title_value} if title_value else None,
+        "error": error,
+        "action": "/admin/pages/insert",
+        "auto_page_no": False,
+        "insert_mode": True,
+        "insert_no": insert_no,
+        "before_id": before_page.id,
+        "insert_prev_title": prev_title,
+        "insert_next_title": next_title,
+    }
+
+
+@router.get("/pages/insert", response_class=HTMLResponse, response_model=None)
+def pages_insert_form(
+    request: Request,
+    db: Session = Depends(get_db),
+    before: int | None = None,
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=HTTP_303_SEE_OTHER)
+    if before is None or before <= 0:
+        return RedirectResponse(
+            url="/admin/pages?message=missing&order=page_no_desc",
+            status_code=HTTP_303_SEE_OTHER,
+        )
+    before_page = pages_service.get_page(db, before)
+    if before_page is None:
+        return RedirectResponse(
+            url="/admin/pages?message=missing&order=page_no_desc",
+            status_code=HTTP_303_SEE_OTHER,
+        )
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_page_form.html",
+        context=_insert_form_context(before_page=before_page, db=db),
+    )
+
+
+@router.post("/pages/insert", response_model=None)
+async def pages_insert(
+    request: Request,
+    title: str = Form(...),
+    image: UploadFile = File(...),
+    before_id: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=HTTP_303_SEE_OTHER)
+    try:
+        bid = int(before_id.strip()) if before_id.strip() else 0
+    except ValueError:
+        bid = 0
+    before_page = pages_service.get_page(db, bid) if bid > 0 else None
+    if before_page is None:
+        return RedirectResponse(
+            url="/admin/pages?message=missing&order=page_no_desc",
+            status_code=HTTP_303_SEE_OTHER,
+        )
+    try:
+        image_path = await save_comic_image(image)
+        pages_service.insert_page_before(
+            db, before_page=before_page, title=title, image_path=image_path
+        )
+    except HTTPException as exc:
+        return templates.TemplateResponse(
+            request=request,
+            name="admin_page_form.html",
+            context=_insert_form_context(
+                before_page=before_page, title_value=title, error=exc.detail, db=db
+            ),
+            status_code=400,
+        )
+    return RedirectResponse(
+        url="/admin/pages?message=inserted&order=page_no_desc",
+        status_code=HTTP_303_SEE_OTHER,
+    )
+
+
 @router.get("/pages/{page_id}/edit", response_class=HTMLResponse, response_model=None)
 def pages_edit(
     request: Request,
@@ -213,6 +305,7 @@ def pages_edit(
             "page": pages_service.page_to_out(page),
             "error": None,
             "action": f"/admin/pages/{page_id}/edit",
+            "edit_page_no_hint": True,
         },
     )
 
@@ -248,6 +341,7 @@ async def pages_update(
                 "page": pages_service.page_to_out(page),
                 "error": exc.detail,
                 "action": f"/admin/pages/{page_id}/edit",
+                "edit_page_no_hint": True,
             },
             status_code=400,
         )
