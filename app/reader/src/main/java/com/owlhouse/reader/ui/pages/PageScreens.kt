@@ -1102,7 +1102,6 @@ fun PageReaderScreen(
     var showVersionInfo by remember { mutableStateOf(false) }
     var versionDescription by remember { mutableStateOf("") }
     var versionInfoOpen by remember { mutableStateOf(false) }
-    var imageTick by remember { mutableIntStateOf(0) }
     var readerScale by remember { mutableFloatStateOf(1f) }
     var readerOffset by remember { mutableStateOf(Offset.Zero) }
     val aspectByPageId = remember { mutableStateMapOf<Int, Float>() }
@@ -1464,7 +1463,6 @@ fun PageReaderScreen(
         if (!pagerReady) return@LaunchedEffect
         val page = pages.firstOrNull { it.id == currentPageId } ?: return@LaunchedEffect
         source.ensureImage(page)
-        imageTick += 1
     }
 
     LaunchedEffect(chromeTick) {
@@ -1527,10 +1525,7 @@ fun PageReaderScreen(
                             val useStrip = ReaderDisplayMode.effectiveStrip(heightOverWidth)
                             val isSettledPage = index == pagerState.settledPage
                             ZoomableReaderImage(
-                                imageModel = run {
-                                    imageTick
-                                    source.imageModel(item)
-                                },
+                                imageModel = source.imageModel(item),
                                 contentDescription = item.title,
                                 useStrip = useStrip,
                                 heightOverWidth = heightOverWidth,
