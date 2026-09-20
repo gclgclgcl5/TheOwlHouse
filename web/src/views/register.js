@@ -1,6 +1,7 @@
 import { api } from "../api.js";
 import { setToken } from "../store.js";
 import { go } from "../router.js";
+import { playWelcomeSound } from "../welcome-sound.js";
 
 export function renderRegister(root) {
   root.innerHTML = `
@@ -54,6 +55,7 @@ export function renderRegister(root) {
     try {
       const res = await api.register(nick, pass, file);
       setToken(res.access_token);
+      playWelcomeSound();
       go("/home");
     } catch (ex) {
       err.textContent = ex.message || "注册失败";

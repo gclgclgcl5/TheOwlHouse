@@ -2,6 +2,7 @@ import { api } from "../api.js";
 import { setToken } from "../store.js";
 import { go } from "../router.js";
 import { escapeHtml } from "../util.js";
+import { playWelcomeSound } from "../welcome-sound.js";
 
 export function renderLogin(root) {
   root.innerHTML = `
@@ -27,6 +28,7 @@ export function renderLogin(root) {
     try {
       const res = await api.login(String(fd.get("nickname") || "").trim(), String(fd.get("password") || ""));
       setToken(res.access_token);
+      playWelcomeSound();
       go("/home");
     } catch (ex) {
       err.textContent = ex.message || "登录失败";

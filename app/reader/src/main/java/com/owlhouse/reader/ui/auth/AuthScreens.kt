@@ -47,6 +47,7 @@ import com.owlhouse.reader.OwlHouseApp
 import com.owlhouse.reader.data.api.ApiClient
 import com.owlhouse.reader.data.api.LoginRequest
 import com.owlhouse.reader.data.api.userFacingError
+import com.owlhouse.reader.ui.WelcomeSound
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -142,6 +143,7 @@ fun LoginScreen(
                             try {
                                 val res = ApiClient.api.login(LoginRequest(nickname.trim(), password))
                                 app.tokenStore.token = res.accessToken
+                                WelcomeSound.play(context)
                                 onLoggedIn()
                             } catch (e: Exception) {
                                 error = userFacingError(e, "登录失败")
@@ -294,6 +296,7 @@ fun RegisterScreen(
                                 val passBody = password.toRequestBody("text/plain".toMediaTypeOrNull())
                                 val res = ApiClient.api.register(nickBody, passBody, part)
                                 app.tokenStore.token = res.accessToken
+                                WelcomeSound.play(context)
                                 onRegistered()
                             } catch (e: Exception) {
                                 error = userFacingError(e, "注册失败")
