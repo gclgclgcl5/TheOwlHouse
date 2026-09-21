@@ -147,6 +147,9 @@ def renumber_pages_contiguous(db: Session, *, commit: bool = True) -> None:
 
 
 def delete_page(db: Session, page: ComicPage) -> None:
+    from app.services import admin_inbox as admin_inbox_service
+
+    admin_inbox_service.delete_for_page(db, page.id)
     delete_upload(page.image_path)
     db.delete(page)
     db.flush()

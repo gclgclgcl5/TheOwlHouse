@@ -11,6 +11,7 @@ from starlette.status import HTTP_303_SEE_OTHER
 from app.admin.auth import SESSION_KEY, is_admin
 from app.config import BASE_DIR, settings
 from app.database import get_db
+from app.services import admin_inbox as admin_inbox_service
 from app.services import app_update as app_update_service
 from app.services import comments as comments_service
 from app.services import home_announcement as home_announcement_service
@@ -85,7 +86,7 @@ def logout(request: Request) -> RedirectResponse:
 
 
 @router.get("/", response_class=HTMLResponse, response_model=None)
-def admin_home(request: Request):
+def admin_home(request: Request, db: Session = Depends(get_db)):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=HTTP_303_SEE_OTHER)
     return templates.TemplateResponse(
@@ -95,7 +96,95 @@ def admin_home(request: Request):
             "app_name": settings.app_name,
             "title": "管理后台",
             "admin_username": request.session.get("admin_username", "admin"),
+            "doujin_unread": admin_inbox_service.unread_count(db, "doujin"),
+            "king_unread": admin_inbox_service.unread_count(db, "king"),
         },
+    )
+
+
+def _inbox_title(section: str) -> str:
+    return "同人消息" if section == "doujin" else "长寿之王消息"
+
+
+@router.get("/inbox/{section}", response_class=HTMLResponse, response_model=None)
+def inbox_list(
+    request: Request,
+    section: str,
+    db: Session = Depends(get_db),
+    page: int = 1,
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=HTTP_303_SEE_OTHER)
+    if section not in ("doujin", "king"):
+        return RedirectResponse(url="/admin/", status_code=HTTP_303_SEE_OTHER)
+    page_size = admin_inbox_service.PAGE_SIZE
+    page = max(1, page)
+    items, total = admin_inbox_service.list_section(db, section, page=page)
+    total_pages = max(1, (total + page_size - 1) // page_size) if total else 1
+    if page > total_pages:
+        page = total_pages
+        items, total = admin_inbox_service.list_section(db, section, page=page)
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_inbox.html",
+        context={
+            "app_name": settings.app_name,
+            "title": _inbox_title(section),
+            "section": section,
+            "items": items,
+            "total": total,
+            "unread": admin_inbox_service.unread_count(db, section),
+            "page": page,
+            "total_pages": total_pages,
+            "page_numbers": _page_numbers(page, total_pages),
+            "message": request.query_params.get("message"),
+        },
+    )
+
+
+@router.post("/inbox/{section}/read-all", response_model=None)
+def inbox_read_all(
+    request: Request,
+    section: str,
+    db: Session = Depends(get_db),
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=HTTP_303_SEE_OTHER)
+    if section not in ("doujin", "king"):
+        return RedirectResponse(url="/admin/", status_code=HTTP_303_SEE_OTHER)
+    admin_inbox_service.mark_section_read(db, section)
+    return RedirectResponse(
+        url=f"/admin/inbox/{section}?message=read-all",
+        status_code=HTTP_303_SEE_OTHER,
+    )
+
+
+@router.get("/inbox/items/{item_id}/open", response_model=None)
+def inbox_open(
+    request: Request,
+    item_id: int,
+    db: Session = Depends(get_db),
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=HTTP_303_SEE_OTHER)
+    item = admin_inbox_service.get_item(db, item_id)
+    if item is None:
+        return RedirectResponse(url="/admin/", status_code=HTTP_303_SEE_OTHER)
+    section = "doujin" if item.page_id is not None else "king"
+    admin_inbox_service.mark_read(db, item)
+    if item.page_id is not None:
+        return RedirectResponse(
+            url=f"/admin/pages/{item.page_id}/comments",
+            status_code=HTTP_303_SEE_OTHER,
+        )
+    if item.king_slot_id is not None:
+        return RedirectResponse(
+            url=f"/admin/king/slots/{item.king_slot_id}/comments",
+            status_code=HTTP_303_SEE_OTHER,
+        )
+    return RedirectResponse(
+        url=f"/admin/inbox/{section}",
+        status_code=HTTP_303_SEE_OTHER,
     )
 
 

@@ -10,6 +10,7 @@ from app.models.like import Like
 from app.models.user import User
 from app.schemas.comment import CommentOut
 from app.services import notifications as notifications_service
+from app.services import admin_inbox as admin_inbox_service
 from app.services.storage import media_url
 
 
@@ -257,6 +258,9 @@ def create_comment(
         content=text,
     )
     db.add(comment)
+    db.flush()
+    db.refresh(comment)
+    admin_inbox_service.record_for_comment(db, comment)
     db.commit()
     db.refresh(comment)
 
@@ -343,6 +347,9 @@ def create_slot_comment(
         content=text,
     )
     db.add(comment)
+    db.flush()
+    db.refresh(comment)
+    admin_inbox_service.record_for_comment(db, comment)
     db.commit()
     db.refresh(comment)
 
@@ -390,6 +397,7 @@ def delete_comment_cascade(db: Session, comment_id: int) -> bool:
     )
     all_ids = child_ids + [comment_id]
     notifications_service.nullify_comment_refs(db, all_ids)
+    admin_inbox_service.delete_for_comments(db, all_ids)
     # 先清其他评论对本条的 reply_to 引用，避免 FK 阻碍删除
     db.execute(
         update(Comment)

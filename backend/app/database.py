@@ -178,3 +178,10 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _ensure_schema()
+    from app.services import admin_inbox as admin_inbox_service
+
+    db = SessionLocal()
+    try:
+        admin_inbox_service.backfill_missing(db)
+    finally:
+        db.close()

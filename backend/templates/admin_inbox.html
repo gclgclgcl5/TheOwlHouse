@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>{{ title }}</h1>
+    <p class="hint">共 {{ total }} 条 · 未读 {{ unread }}</p>
+    <p><a class="back-link" href="/admin/">← 返回首页</a></p>
+  </header>
+  <main>
+    {% if message == "read-all" %}
+    <p class="ok">已全部标为已读</p>
+    {% endif %}
+    <form method="post" action="/admin/inbox/{{ section }}/read-all">
+      <button type="submit">全部已读</button>
+    </form>
+    {% if items %}
+    <div class="data-list data-list--inbox">
+      <div class="data-list__head">
+        <span>时间</span>
+        <span>作者</span>
+        <span>页面</span>
+        <span>内容</span>
+        <span>状态</span>
+      </div>
+      {% for item in items %}
+      <a class="data-list__row{% if not item.is_read %} unread{% endif %}" href="/admin/inbox/items/{{ item.id }}/open">
+        <div class="data-list__cell hint">{{ item.created_at }}</div>
+        <div class="data-list__cell">{{ item.author_nickname }}</div>
+        <div class="data-list__cell">第 {{ item.page_no or "—" }} 页 · {{ item.page_title or "（页已删除）" }}</div>
+        <div class="data-list__cell">{{ item.preview }}</div>
+        <div class="data-list__cell">{% if item.is_read %}已读{% else %}未读{% endif %}</div>
+      </a>
+      {% endfor %}
+    </div>
+    {% if total_pages > 1 %}
+    <nav class="pager" aria-label="分页">
+      {% if page > 1 %}
+      <a href="/admin/inbox/{{ section }}?page={{ page - 1 }}">上一页</a>
+      {% else %}
+      <span class="pager__disabled">上一页</span>
+      {% endif %}
+      {% for n in page_numbers %}
+        {% if n == page %}
+        <span class="pager__current" aria-current="page">{{ n }}</span>
+        {% else %}
+        <a href="/admin/inbox/{{ section }}?page={{ n }}">{{ n }}</a>
+        {% endif %}
+      {% endfor %}
+      {% if page < total_pages %}
+      <a href="/admin/inbox/{{ section }}?page={{ page + 1 }}">下一页</a>
+      {% else %}
+      <span class="pager__disabled">下一页</span>
+      {% endif %}
+    </nav>
+    {% endif %}
+    {% else %}
+    <p class="hint">还没有评论消息。</p>
+    {% endif %}
+  </main>
+</body>
+</html>
