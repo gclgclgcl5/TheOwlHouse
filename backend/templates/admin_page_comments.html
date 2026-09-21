@@ -21,7 +21,7 @@
       <li class="comment-item">
         <div class="comment-meta">
           <strong>{{ c.author_nickname }}</strong>
-          <span class="hint">#{{ c.id }} · {{ c.created_at }} · {{ c.like_count }} 赞</span>
+          <span class="hint">#{{ c.id }} · {{ c.created_at | cn_time }} · {{ c.like_count }} 赞</span>
         </div>
         <p>{{ c.content }}</p>
         <form method="post" action="/admin/comments/{{ c.id }}/delete"
@@ -34,7 +34,7 @@
           <li class="comment-item reply">
             <div class="comment-meta">
               <strong>{{ r.author_nickname }}</strong>
-              <span class="hint">#{{ r.id }} · {{ r.created_at }} · {{ r.like_count }} 赞</span>
+              <span class="hint">#{{ r.id }} · {{ r.created_at | cn_time }} · {{ r.like_count }} 赞</span>
             </div>
             <p>{{ r.content }}</p>
             <form method="post" action="/admin/comments/{{ r.id }}/delete"

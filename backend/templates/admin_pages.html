@@ -19,6 +19,7 @@
     <p class="hint">漏传：在漏页后的那一页点「在此之前插入」。多传：删除后自动重排为连续页序。</p>
     <p>
       <a class="button" href="/admin/pages/new">新增同人页</a>
+      <a class="button" href="/admin/inbox/doujin">消息{% if doujin_unread %}（{{ doujin_unread }}）{% endif %}</a>
     </p>
     {% if pages %}
     <div class="data-list data-list--pages">
@@ -43,7 +44,7 @@
         </div>
         <div class="data-list__cell">{{ p.title }}</div>
         <div class="data-list__cell">{{ p.page_no }}</div>
-        <div class="data-list__cell hint">{{ p.created_at }}</div>
+        <div class="data-list__cell hint">{{ p.created_at | cn_time }}</div>
         <div class="data-list__cell data-list__actions">
           <a href="/admin/pages/{{ p.id }}/comments">评论（{{ p.comment_count }}）</a>
           <a href="/admin/pages/{{ p.id }}/edit">编辑</a>

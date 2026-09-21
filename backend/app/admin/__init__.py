@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from starlette.status import HTTP_303_SEE_OTHER
 
 from app.admin.auth import SESSION_KEY, is_admin
+from app.admin.timefmt import format_cn_time
 from app.config import BASE_DIR, settings
 from app.database import get_db
 from app.services import admin_inbox as admin_inbox_service
@@ -21,6 +22,7 @@ from app.services.storage import save_comic_image
 
 router = APIRouter(prefix="/admin", tags=["admin-web"])
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+templates.env.filters["cn_time"] = format_cn_time
 
 ADMIN_PAGES_PAGE_SIZE = 100
 ADMIN_USERS_PAGE_SIZE = 50
@@ -86,7 +88,7 @@ def logout(request: Request) -> RedirectResponse:
 
 
 @router.get("/", response_class=HTMLResponse, response_model=None)
-def admin_home(request: Request, db: Session = Depends(get_db)):
+def admin_home(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=HTTP_303_SEE_OTHER)
     return templates.TemplateResponse(
@@ -96,8 +98,6 @@ def admin_home(request: Request, db: Session = Depends(get_db)):
             "app_name": settings.app_name,
             "title": "管理后台",
             "admin_username": request.session.get("admin_username", "admin"),
-            "doujin_unread": admin_inbox_service.unread_count(db, "doujin"),
-            "king_unread": admin_inbox_service.unread_count(db, "king"),
         },
     )
 
@@ -138,6 +138,8 @@ def inbox_list(
             "total_pages": total_pages,
             "page_numbers": _page_numbers(page, total_pages),
             "message": request.query_params.get("message"),
+            "back_href": "/admin/pages" if section == "doujin" else "/admin/king",
+            "back_label": "← 返回同人列表" if section == "doujin" else "← 返回长寿之王",
         },
     )
 
@@ -228,6 +230,7 @@ def pages_list(
             "page_numbers": _page_numbers(page, total_pages),
             "message": request.query_params.get("message"),
             "order": order,
+            "doujin_unread": admin_inbox_service.unread_count(db, "doujin"),
         },
     )
 

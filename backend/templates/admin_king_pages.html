@@ -37,9 +37,14 @@
 
     {% if pending > 0 %}
     <p class="hint">请先补全待上传页，再追加新页。</p>
-    <p><span class="button button--disabled">追加新页</span></p>
+    <p><span class="button button--disabled">追加新页</span>
+      <a class="button" href="/admin/inbox/king">消息{% if king_unread %}（{{ king_unread }}）{% endif %}</a>
+    </p>
     {% else %}
-    <p><a class="button" href="/admin/king/versions/{{ version.id }}/pages/new">追加新页</a></p>
+    <p>
+      <a class="button" href="/admin/king/versions/{{ version.id }}/pages/new">追加新页</a>
+      <a class="button" href="/admin/inbox/king">消息{% if king_unread %}（{{ king_unread }}）{% endif %}</a>
+    </p>
     {% endif %}
 
     {% if rows %}

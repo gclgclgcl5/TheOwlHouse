@@ -36,7 +36,7 @@
         </div>
         <div class="data-list__cell">{{ u.id }}</div>
         <div class="data-list__cell">{{ u.nickname }}</div>
-        <div class="data-list__cell hint">{{ u.created_at }}</div>
+        <div class="data-list__cell hint">{{ u.created_at | cn_time }}</div>
         <div class="data-list__cell data-list__actions">
           <a href="/admin/users/{{ u.id }}/password?page={{ page }}">修改密码</a>
           <form method="post" action="/admin/users/{{ u.id }}/delete"

@@ -7,14 +7,17 @@ from sqlalchemy.orm import Session
 from starlette.status import HTTP_303_SEE_OTHER
 
 from app.admin.auth import is_admin
+from app.admin.timefmt import format_cn_time
 from app.config import BASE_DIR, settings
 from app.database import get_db
+from app.services import admin_inbox as admin_inbox_service
 from app.services import comments as comments_service
 from app.services import king as king_service
 from app.services.storage import media_url, save_comic_image, save_king_cover
 
 router = APIRouter(prefix="/king", tags=["admin-king"])
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+templates.env.filters["cn_time"] = format_cn_time
 
 
 def _login_redirect() -> RedirectResponse:
@@ -98,6 +101,7 @@ def king_version_pages(
             pending=pending,
             uploaded=uploaded,
             slot_total=king_service.slot_count(db),
+            king_unread=admin_inbox_service.unread_count(db, "king"),
             message=request.query_params.get("message"),
             error=request.query_params.get("error"),
         ),

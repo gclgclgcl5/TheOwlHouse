@@ -10,7 +10,7 @@
   <header class="top">
     <h1>{{ title }}</h1>
     <p class="hint">共 {{ total }} 条 · 未读 {{ unread }}</p>
-    <p><a class="back-link" href="/admin/">← 返回首页</a></p>
+    <p><a class="back-link" href="{{ back_href }}">{{ back_label }}</a></p>
   </header>
   <main>
     {% if message == "read-all" %}
@@ -29,13 +29,16 @@
         <span>状态</span>
       </div>
       {% for item in items %}
-      <a class="data-list__row{% if not item.is_read %} unread{% endif %}" href="/admin/inbox/items/{{ item.id }}/open">
-        <div class="data-list__cell hint">{{ item.created_at }}</div>
+      <div class="data-list__row{% if not item.is_read %} unread{% endif %}">
+        <div class="data-list__cell hint">{{ item.created_at | cn_time }}</div>
         <div class="data-list__cell">{{ item.author_nickname }}</div>
         <div class="data-list__cell">第 {{ item.page_no or "—" }} 页 · {{ item.page_title or "（页已删除）" }}</div>
-        <div class="data-list__cell">{{ item.preview }}</div>
-        <div class="data-list__cell">{% if item.is_read %}已读{% else %}未读{% endif %}</div>
-      </a>
+        <div class="data-list__cell inbox-preview">{{ item.preview }}</div>
+        <div class="data-list__cell data-list__actions">
+          <span>{% if item.is_read %}已读{% else %}未读{% endif %}</span>
+          <a href="/admin/inbox/items/{{ item.id }}/open">查看</a>
+        </div>
+      </div>
       {% endfor %}
     </div>
     {% if total_pages > 1 %}
