@@ -247,6 +247,44 @@ button, input, textarea { font: inherit; }
   border-radius: 12px;
   background: var(--surface-2);
 }
+.page-thumb-missing {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: rgba(90, 100, 120, 0.55);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  line-height: 1.2;
+}
+.page-row.missing {
+  cursor: default;
+}
+.toast-tip {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%) translateY(12px);
+  z-index: 80;
+  max-width: min(90vw, 320px);
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(12, 24, 56, 0.94);
+  color: var(--text);
+  font-size: 0.9rem;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.toast-tip.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
 .page-row.read { opacity: 0.7; }
 .page-row.current { background: rgba(30, 58, 122, 0.9); }
 .page-row .title { font-weight: 600; }

@@ -4,8 +4,10 @@ import {
   loadProgress,
   logout,
   isRead,
-  loadCollectionMode,
-  saveCollectionMode,
+  loadDoujinCollectionMode,
+  saveDoujinCollectionMode,
+  loadKingCollectionMode,
+  saveKingCollectionMode,
   loadHomeTab,
   saveHomeTab,
   loadKingProgress,
@@ -47,15 +49,20 @@ export function renderHome(root) {
   let total = 0;
   let loadingMore = false;
   let title = "欢迎来到沸腾群岛！";
-  let collectionMode = loadCollectionMode();
   let homeTab = loadHomeTab();
+  let doujinCollectionMode = loadDoujinCollectionMode();
+  let kingCollectionMode = loadKingCollectionMode();
   let kingVersions = [];
+
+  function collectionModeForTab() {
+    return homeTab === "king" ? kingCollectionMode : doujinCollectionMode;
+  }
 
   root.innerHTML = `
     <div class="screen">
       <header class="topbar">
         <div class="marquee" id="announce"><span id="announce-text"></span></div>
-        <button class="icon-btn${collectionMode ? " on" : ""}" id="collection" type="button" title="合集模式" aria-pressed="${collectionMode ? "true" : "false"}">
+        <button class="icon-btn" id="collection" type="button" title="合集模式" aria-pressed="true">
           <svg class="icon-layers" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
             <path fill="currentColor" d="M12 2 2 7l10 5 10-5-10-5zm0 9L2 6v2l10 5 10-5V6l-10 5zm0 4L2 10v2l10 5 10-5v-2l-10 5z"/>
           </svg>
@@ -127,11 +134,10 @@ export function renderHome(root) {
   setAnnounce(title);
 
   function syncCollectionBtn() {
-    const show = homeTab === "doujin";
-    collectionBtn.classList.toggle("hidden", !show);
-    collectionBtn.classList.toggle("on", collectionMode);
-    collectionBtn.setAttribute("aria-pressed", collectionMode ? "true" : "false");
-    collectionBtn.title = collectionMode ? "合集模式已开" : "合集模式";
+    const on = collectionModeForTab();
+    collectionBtn.classList.toggle("on", on);
+    collectionBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    collectionBtn.title = on ? "合集模式已开" : "合集模式";
   }
 
   function syncTabs() {
@@ -157,7 +163,7 @@ export function renderHome(root) {
           <div class="title">${escapeHtml(prog.lastTitle || "上次阅读")}</div>
         </div>`);
     }
-    if (collectionMode) {
+    if (doujinCollectionMode) {
       const collections = groupPagesByExactTitle(pages);
       collections.forEach((col, i) => {
         const current = col.pages.some((p) => p.id === prog.lastPageId);
@@ -199,7 +205,7 @@ export function renderHome(root) {
     listEl.querySelectorAll("[data-open]").forEach((el) => {
       el.onclick = () => go(`/page/${el.dataset.open}`);
     });
-    if (collectionMode) {
+    if (doujinCollectionMode) {
       const collections = groupPagesByExactTitle(pages);
       listEl.querySelectorAll("[data-collection-i]").forEach((el) => {
         el.onclick = () => {
@@ -234,7 +240,11 @@ export function renderHome(root) {
     });
     listEl.innerHTML = parts.join("");
     listEl.querySelectorAll("[data-version]").forEach((el) => {
-      el.onclick = () => go(`/king/${el.dataset.version}`);
+      el.onclick = () => {
+        const vid = el.dataset.version;
+        if (kingCollectionMode) go(`/king/${vid}`);
+        else go(`/king/${vid}/pages`);
+      };
     });
     listEl.querySelectorAll("[data-info-version]").forEach((btn) => {
       btn.onclick = (e) => {
@@ -279,7 +289,7 @@ export function renderHome(root) {
     const res = await api.listPages({ limit: PAGE_SIZE, offset: 0, order: "page_no" });
     pages = res.items || [];
     total = res.total || 0;
-    if (collectionMode) await ensureAllPagesLoaded();
+    if (doujinCollectionMode) await ensureAllPagesLoaded();
     const end = pages.length >= total && total > 0;
     renderDoujinList(end ? `<p class="hint" style="text-align:center">没有更多了</p>` : "");
   }
@@ -305,7 +315,7 @@ export function renderHome(root) {
   }
 
   async function loadMore() {
-    if (homeTab !== "doujin" || collectionMode || loadingMore || pages.length >= total) return;
+    if (homeTab !== "doujin" || doujinCollectionMode || loadingMore || pages.length >= total) return;
     loadingMore = true;
     try {
       const res = await api.listPages({ limit: PAGE_SIZE, offset: pages.length, order: "page_no" });
@@ -321,9 +331,14 @@ export function renderHome(root) {
   }
 
   async function setCollectionMode(on) {
-    if (homeTab !== "doujin") return;
-    collectionMode = on;
-    saveCollectionMode(on);
+    if (homeTab === "king") {
+      kingCollectionMode = on;
+      saveKingCollectionMode(on);
+      syncCollectionBtn();
+      return;
+    }
+    doujinCollectionMode = on;
+    saveDoujinCollectionMode(on);
     syncCollectionBtn();
     if (on) {
       try {
@@ -348,7 +363,7 @@ export function renderHome(root) {
   }
 
   listEl.addEventListener("scroll", () => {
-    if (homeTab !== "doujin" || collectionMode) return;
+    if (homeTab !== "doujin" || doujinCollectionMode) return;
     if (listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 80) {
       loadMore();
     }
@@ -379,7 +394,7 @@ export function renderHome(root) {
   root.querySelectorAll(".home-tab").forEach((btn) => {
     btn.onclick = () => setHomeTab(btn.dataset.tab);
   });
-  collectionBtn.onclick = () => setCollectionMode(!collectionMode);
+  collectionBtn.onclick = () => setCollectionMode(!collectionModeForTab());
   root.querySelector("#msg").onclick = () => go("/notifications");
   root.querySelector("#logout").onclick = () => dlg.classList.remove("hidden");
   root.querySelector("#dlg-no").onclick = () => dlg.classList.add("hidden");

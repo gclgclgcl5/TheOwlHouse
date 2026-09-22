@@ -9,6 +9,9 @@ export function parseHash() {
   }
   if (parts[0] === "king" && parts[1]) {
     const versionId = Number(parts[1]);
+    if (parts[2] === "pages") {
+      return { name: "king-pages", versionId };
+    }
     if (parts[2] === "slot" && parts[3]) {
       return { name: "king", versionId, slotId: Number(parts[3]) };
     }

@@ -28,6 +28,7 @@ import com.owlhouse.reader.ui.auth.LoginScreen
 import com.owlhouse.reader.ui.auth.RegisterScreen
 import com.owlhouse.reader.ui.notifications.NotificationsScreen
 import com.owlhouse.reader.ui.pages.KingReaderSource
+import com.owlhouse.reader.ui.pages.KingVersionPagesScreen
 import com.owlhouse.reader.ui.pages.PageListScreen
 import com.owlhouse.reader.ui.pages.PageReaderScreen
 import com.owlhouse.reader.ui.theme.OwlHouseTheme
@@ -117,6 +118,9 @@ private fun OwlHouseNav() {
                 onOpenKing = { versionId, slotId ->
                     navController.navigate("king/$versionId?slotId=$slotId")
                 },
+                onOpenKingPages = { versionId ->
+                    navController.navigate("king/$versionId/pages")
+                },
                 onOpenNotifications = { navController.navigate("notifications") },
                 onLogout = { goLogin() },
                 onSessionExpired = { goLogin() },
@@ -148,6 +152,20 @@ private fun OwlHouseNav() {
             PageReaderScreen(
                 pageId = id,
                 onBack = { navController.popBackStack() },
+                onSessionExpired = { goLogin() },
+            )
+        }
+        composable(
+            route = "king/{versionId}/pages",
+            arguments = listOf(navArgument("versionId") { type = NavType.IntType }),
+        ) { entry ->
+            val versionId = entry.arguments?.getInt("versionId") ?: return@composable
+            KingVersionPagesScreen(
+                versionId = versionId,
+                onBack = { navController.popBackStack() },
+                onOpenSlot = { slotId ->
+                    navController.navigate("king/$versionId?slotId=$slotId")
+                },
                 onSessionExpired = { goLogin() },
             )
         }

@@ -33,13 +33,18 @@ def list_king_versions(
 @router.get("/versions/{version_id}/pages", response_model=KingPageListOut)
 def list_king_version_pages(
     version_id: int,
+    include_missing: bool = Query(False),
     _: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> KingPageListOut:
     version = king_service.get_version(db, version_id)
     if version is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在")
-    rows = king_service.list_version_uploaded_pages(db, version_id)
+    rows = (
+        king_service.list_version_slots(db, version_id)
+        if include_missing
+        else king_service.list_version_uploaded_pages(db, version_id)
+    )
     return KingPageListOut(
         version_id=version.id,
         version_name=version.name,

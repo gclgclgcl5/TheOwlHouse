@@ -171,6 +171,7 @@ private fun groupPagesByExactTitle(pages: List<ComicPageOut>): List<TitleCollect
 fun PageListScreen(
     onOpenPage: (Int) -> Unit,
     onOpenKing: (versionId: Int, slotId: Int) -> Unit,
+    onOpenKingPages: (versionId: Int) -> Unit,
     onOpenNotifications: () -> Unit,
     onLogout: () -> Unit,
     onSessionExpired: () -> Unit,
@@ -189,7 +190,8 @@ fun PageListScreen(
     var unread by remember { mutableIntStateOf(0) }
     var homeTitle by remember { mutableStateOf(app.homeAnnouncement.displayedTitle) }
     var confirmLogout by remember { mutableStateOf(false) }
-    var collectionMode by remember { mutableStateOf(app.collectionMode.enabled) }
+    var doujinCollectionMode by remember { mutableStateOf(app.collectionMode.doujinEnabled) }
+    var kingCollectionMode by remember { mutableStateOf(app.collectionMode.kingEnabled) }
     var lastPageId by remember { mutableIntStateOf(app.readingProgress.lastPageId) }
     var lastPageNo by remember { mutableIntStateOf(app.readingProgress.lastPageNo) }
     var lastTitle by remember { mutableStateOf(app.readingProgress.lastTitle) }
@@ -199,6 +201,7 @@ fun PageListScreen(
     val listState = rememberLazyListState()
     val isKingTab = homeTab == HomeTabStore.TAB_KING
     val latestIsKingTab = rememberUpdatedState(isKingTab)
+    val collectionMode = if (isKingTab) kingCollectionMode else doujinCollectionMode
 
     fun reloadProgress() {
         lastPageId = app.readingProgress.lastPageId
@@ -246,10 +249,10 @@ fun PageListScreen(
                 pages = pages + res.data.items
                 total = res.data.total
             }
-            if (collectionMode) {
+            if (doujinCollectionMode) {
                 ensureAllPagesLoaded()
             }
-            val listIndex = if (collectionMode) {
+            val listIndex = if (doujinCollectionMode) {
                 val collections = groupPagesByExactTitle(pages)
                 val idx = collections.indexOfFirst { c -> c.pages.any { it.id == targetId } }
                 if (idx < 0) return
@@ -344,7 +347,7 @@ fun PageListScreen(
                 if (!res.fromCache) {
                     refreshMeta()
                 }
-                if (collectionMode) {
+                if (doujinCollectionMode) {
                     ensureAllPagesLoaded()
                 }
                 reloadProgress()
@@ -381,7 +384,7 @@ fun PageListScreen(
     }
 
     fun loadMore() {
-        if (isKingTab || collectionMode) return
+        if (isKingTab || doujinCollectionMode) return
         if (loadingMore || refreshing || loading || syncingToProgress || pages.isEmpty()) return
         if (pages.size >= total) return
         scope.launch {
@@ -404,8 +407,13 @@ fun PageListScreen(
     }
 
     fun setCollectionMode(on: Boolean) {
-        collectionMode = on
-        app.collectionMode.enabled = on
+        if (isKingTab) {
+            kingCollectionMode = on
+            app.collectionMode.kingEnabled = on
+            return
+        }
+        doujinCollectionMode = on
+        app.collectionMode.doujinEnabled = on
         if (on) {
             scope.launch {
                 try {
@@ -434,7 +442,7 @@ fun PageListScreen(
         }
     }
 
-    LaunchedEffect(listState, isKingTab, collectionMode) {
+    LaunchedEffect(listState, isKingTab, doujinCollectionMode) {
         if (isKingTab) return@LaunchedEffect
         snapshotFlow {
             val info = listState.layoutInfo
@@ -444,7 +452,7 @@ fun PageListScreen(
         }
             .distinctUntilChanged()
             .collect { (lastVisible, totalItems) ->
-                if (!collectionMode && totalItems > 0 && lastVisible >= totalItems - 3) {
+                if (!doujinCollectionMode && totalItems > 0 && lastVisible >= totalItems - 3) {
                     loadMore()
                 }
             }
@@ -453,8 +461,8 @@ fun PageListScreen(
     val pullState = rememberPullRefreshState(refreshing, onRefresh = { refresh() })
     val hasProgress = !isKingTab && lastPageId > 0
     val endReached = !isKingTab && pages.isNotEmpty() && pages.size >= total && total > 0
-    val collections = remember(pages, collectionMode, isKingTab) {
-        if (!isKingTab && collectionMode) groupPagesByExactTitle(pages) else emptyList()
+    val collections = remember(pages, doujinCollectionMode, isKingTab) {
+        if (!isKingTab && doujinCollectionMode) groupPagesByExactTitle(pages) else emptyList()
     }
     val selectedTabIndex = if (isKingTab) 1 else 0
 
@@ -511,21 +519,18 @@ fun PageListScreen(
                     )
                     IconButton(
                         onClick = { setCollectionMode(!collectionMode) },
-                        enabled = !isKingTab,
                         modifier = Modifier.size(48.dp),
                     ) {
-                        if (!isKingTab) {
-                            Icon(
-                                imageVector = if (collectionMode) Icons.Filled.Layers else Icons.Outlined.Layers,
-                                contentDescription = if (collectionMode) "合集模式已开" else "合集模式",
-                                tint = if (collectionMode) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onBackground
-                                },
-                                modifier = Modifier.size(26.dp),
-                            )
-                        }
+                        Icon(
+                            imageVector = if (collectionMode) Icons.Filled.Layers else Icons.Outlined.Layers,
+                            contentDescription = if (collectionMode) "合集模式已开" else "合集模式",
+                            tint = if (collectionMode) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onBackground
+                            },
+                            modifier = Modifier.size(26.dp),
+                        )
                     }
                     Box(
                         modifier = Modifier
@@ -621,7 +626,10 @@ fun PageListScreen(
                         KingVersionCard(
                             version = version,
                             isLastRead = lastKingVersionId > 0 && version.id == lastKingVersionId,
-                            onClick = { onOpenKing(version.id, 0) },
+                            onClick = {
+                                if (kingCollectionMode) onOpenKing(version.id, 0)
+                                else onOpenKingPages(version.id)
+                            },
                         )
                     }
                 }
@@ -651,7 +659,7 @@ fun PageListScreen(
                             )
                         }
                     }
-                    if (collectionMode) {
+                    if (doujinCollectionMode) {
                         items(collections, key = { "col-${it.title}-${it.cover.id}" }) { col ->
                             val isCurrent = col.pages.any { it.id == lastPageId }
                             val allRead = lastPageNo > 0 && col.pages.all { it.pageNo <= lastPageNo }

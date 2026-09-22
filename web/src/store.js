@@ -50,16 +50,40 @@ export function isRead(page) {
 }
 
 const COLL_KEY = "owlhouse_collection_mode";
+const KING_COLL_KEY = "owlhouse_king_collection_mode";
 
-/** 合集模式（默认开）。 */
-export function loadCollectionMode() {
-  const raw = localStorage.getItem(COLL_KEY);
-  if (raw === null) return true;
+function _loadBoolPref(key, defaultValue = true) {
+  const raw = localStorage.getItem(key);
+  if (raw === null) return defaultValue;
   return raw === "1" || raw === "true";
 }
 
-export function saveCollectionMode(on) {
+/** 同人合集模式（默认开）。兼容旧 key owlhouse_collection_mode。 */
+export function loadDoujinCollectionMode() {
+  return _loadBoolPref(COLL_KEY, true);
+}
+
+export function saveDoujinCollectionMode(on) {
   localStorage.setItem(COLL_KEY, on ? "1" : "0");
+}
+
+/** 长寿之王合集模式（默认开）。 */
+export function loadKingCollectionMode() {
+  return _loadBoolPref(KING_COLL_KEY, true);
+}
+
+export function saveKingCollectionMode(on) {
+  localStorage.setItem(KING_COLL_KEY, on ? "1" : "0");
+}
+
+/** @deprecated 使用 loadDoujinCollectionMode */
+export function loadCollectionMode() {
+  return loadDoujinCollectionMode();
+}
+
+/** @deprecated 使用 saveDoujinCollectionMode */
+export function saveCollectionMode(on) {
+  saveDoujinCollectionMode(on);
 }
 
 const COMMENTS_LAYOUT_KEY = "owlhouse_comments_layout";

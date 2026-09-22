@@ -84,7 +84,10 @@ interface OwlHouseApi {
     suspend fun listKingVersions(): KingVersionListOut
 
     @GET("api/king/versions/{id}/pages")
-    suspend fun listKingVersionPages(@Path("id") versionId: Int): KingPageListOut
+    suspend fun listKingVersionPages(
+        @Path("id") versionId: Int,
+        @Query("include_missing") includeMissing: Boolean? = null,
+    ): KingPageListOut
 
     @GET("api/king/resolve")
     suspend fun resolveKingPage(

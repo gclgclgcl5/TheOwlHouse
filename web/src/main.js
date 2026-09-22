@@ -6,6 +6,7 @@ import { renderHome } from "./views/home.js";
 import { renderReader } from "./views/reader.js";
 import { createDoujinSource, createKingSource } from "./reader-source.js";
 import { renderNotifications } from "./views/notifications.js";
+import { renderKingPages } from "./views/king-pages.js";
 
 const app = document.getElementById("app");
 
@@ -28,6 +29,9 @@ function render(route) {
       break;
     case "page":
       renderReader(app, createDoujinSource(route.pageId));
+      break;
+    case "king-pages":
+      renderKingPages(app, route.versionId);
       break;
     case "king":
       renderReader(app, createKingSource(route.versionId, route.slotId || 0));

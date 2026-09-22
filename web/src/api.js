@@ -120,8 +120,9 @@ export const api = {
   listKingVersions() {
     return request("/api/king/versions");
   },
-  listKingVersionPages(versionId) {
-    return request(`/api/king/versions/${versionId}/pages`);
+  listKingVersionPages(versionId, { includeMissing = false } = {}) {
+    const q = includeMissing ? "?include_missing=true" : "";
+    return request(`/api/king/versions/${versionId}/pages${q}`);
   },
   resolveKingPage({ page_no, slot_id, preferred_version_id } = {}) {
     const q = new URLSearchParams();
