@@ -80,7 +80,7 @@ def king_version_pages(
     request: Request,
     version_id: int,
     db: Session = Depends(get_db),
-    order: str = "page_no",
+    order: str = "page_no_desc",
 ):
     if not is_admin(request):
         return _login_redirect()
@@ -88,7 +88,7 @@ def king_version_pages(
     if version is None:
         return RedirectResponse(url="/admin/king", status_code=HTTP_303_SEE_OTHER)
     if order not in ("page_no", "page_no_desc"):
-        order = "page_no"
+        order = "page_no_desc"
     versions = king_service.list_versions(db)
     rows = king_service.list_version_slots(db, version.id)
     if order == "page_no_desc":
