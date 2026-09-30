@@ -29,7 +29,7 @@
     <div class="version-bar">
       <nav class="version-tabs" aria-label="版本">
         {% for v in versions %}
-        <a class="{% if v.id == version.id %}on{% endif %}" href="/admin/king/versions/{{ v.id }}">{{ v.name }}{% if v.is_default %}（默认）{% endif %}</a>
+        <a class="{% if v.id == version.id %}on{% endif %}" href="/admin/king/versions/{{ v.id }}?order={{ order }}">{{ v.name }}{% if v.is_default %}（默认）{% endif %}</a>
         {% endfor %}
       </nav>
       <a class="version-settings-link" href="/admin/king/versions/{{ version.id }}/settings">版本设置</a>
@@ -52,7 +52,14 @@
       <div class="data-list__head">
         <span>预览</span>
         <span>标题</span>
-        <span>页序</span>
+        <span class="sort-head">
+          <span>页序</span>
+          {% if order == "page_no_desc" %}
+          <a class="sort-toggle" href="/admin/king/versions/{{ version.id }}?order=page_no" title="切换为页序从小到大">大→小</a>
+          {% else %}
+          <a class="sort-toggle" href="/admin/king/versions/{{ version.id }}?order=page_no_desc" title="切换为页序从大到小">小→大</a>
+          {% endif %}
+        </span>
         <span>状态</span>
         <span>操作</span>
       </div>

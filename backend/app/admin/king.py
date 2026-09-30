@@ -80,14 +80,19 @@ def king_version_pages(
     request: Request,
     version_id: int,
     db: Session = Depends(get_db),
+    order: str = "page_no",
 ):
     if not is_admin(request):
         return _login_redirect()
     version = king_service.get_version(db, version_id)
     if version is None:
         return RedirectResponse(url="/admin/king", status_code=HTTP_303_SEE_OTHER)
+    if order not in ("page_no", "page_no_desc"):
+        order = "page_no"
     versions = king_service.list_versions(db)
     rows = king_service.list_version_slots(db, version.id)
+    if order == "page_no_desc":
+        rows = list(reversed(rows))
     pending = king_service.pending_count(db, version.id)
     uploaded = king_service.uploaded_count(db, version.id)
     return templates.TemplateResponse(
@@ -98,6 +103,7 @@ def king_version_pages(
             version=version,
             versions=versions,
             rows=rows,
+            order=order,
             pending=pending,
             uploaded=uploaded,
             slot_total=king_service.slot_count(db),
